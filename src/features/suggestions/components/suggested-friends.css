@@ -1,0 +1,21 @@
+.suggested-friends-panel { display: grid; gap: 10px; }
+.suggested-friends-panel > header { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.suggested-friends-panel > header div { display: grid; gap: 2px; }
+.suggested-friends-panel > header span { color: var(--app-text-muted); font-size: 12px; }
+.suggested-friends-list { display: grid; gap: 4px; }
+.suggested-friends-list article { display: flex; align-items: center; gap: 8px; min-height: 58px; }
+.suggested-user { display: flex; flex: 1; min-width: 0; align-items: center; gap: 9px; text-align: left; }
+.suggested-user img { width: 38px; height: 38px; flex: 0 0 38px; border-radius: 50%; object-fit: cover; }
+.suggested-user span { display: grid; min-width: 0; }
+.suggested-user strong, .suggested-user small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.suggested-user small { color: var(--app-text-muted); }
+.suggested-friends-list article > div { display: flex; align-items: center; gap: 3px; }
+.suggested-friends-list article > div button { display: inline-flex; min-height: 36px; align-items: center; gap: 5px; padding: 7px; font-size: 12px; }
+.suggestion-skeleton { display: grid; gap: 7px; }
+.suggestion-skeleton i { height: 52px; border-radius: 6px; background: var(--app-surface-subtle); }
+.suggestions-see-all { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 40px; color: var(--app-text-muted); }
+.suggestions-dialog-backdrop { position: fixed; inset: 0; z-index: 1700; display: grid; place-items: center; padding: 20px; background: rgb(0 0 0 / 42%); }
+.suggestions-dialog { display: flex; flex-direction: column; width: min(460px, 100%); max-height: min(680px, calc(100dvh - 40px)); overflow: hidden; border: 1px solid var(--app-border); border-radius: var(--app-radius-md); background: var(--app-surface); box-shadow: 0 20px 55px rgb(0 0 0 / 18%); }
+.suggestions-dialog > header { display: flex; align-items: center; justify-content: space-between; min-height: 58px; padding: 0 16px; border-bottom: 1px solid var(--app-border); }
+.suggestions-dialog > .suggested-friends-list { overflow-y: auto; padding: 8px 14px 16px; }
+@media (max-width: 640px) { .suggestions-dialog-backdrop { align-items: end; padding: 0; } .suggestions-dialog { width: 100%; max-height: 88dvh; border-radius: 8px 8px 0 0; } }

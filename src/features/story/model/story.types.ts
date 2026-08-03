@@ -1,0 +1,28 @@
+export type StoryItem = {
+  id: string;
+  userId: string;
+  name: string;
+  username: string;
+  avatarUrl: string;
+  mediaUrl?: string;
+  mediaType?: "IMAGE" | "VIDEO";
+  createdAt?: string;
+  expiredAt?: string;
+  status?: string;
+  replyEnabled?: boolean;
+  collectionId?: string;
+  viewerSeen?: boolean;
+  viewerReaction?: "LIKE" | null;
+  publicationId?: string;
+  publicationOrder?: number;
+  publicationItemCount?: number;
+  musicId?: string;
+  musicUrl?: string;
+  musicName?: string;
+  musicStart?: number;
+  musicEnd?: number;
+  durationSeconds?: number;
+  totalItems: number;
+  seenItems: number;
+  state: "add" | "unseen" | "seen" | "muted";
+};

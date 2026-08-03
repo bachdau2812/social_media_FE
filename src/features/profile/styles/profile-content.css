@@ -1,0 +1,196 @@
+/* Profile posts/reposts sections. */
+.profile-tabs {
+  display: flex;
+  justify-content: center;
+  gap: 26px;
+  border-top: 1px solid #e7e7e4;
+  border-bottom: 1px solid #e7e7e4;
+  margin-top: 6px;
+}
+
+.profile-tabs button {
+  min-height: 48px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: #737373;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-weight: 650;
+}
+
+.profile-tabs button.active {
+  color: #0b0b0b;
+  border-bottom-color: #0b0b0b;
+}
+
+.profile-tabs small {
+  color: inherit;
+  font-size: 0.76rem;
+}
+
+.profile-grid button { position: relative; }
+.profile-grid button em {
+  position: absolute;
+  left: 8px;
+  bottom: 8px;
+  min-height: 24px;
+  border-radius: 999px;
+  background: rgba(11, 11, 11, 0.74);
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 8px;
+  font-style: normal;
+  font-size: 0.7rem;
+  backdrop-filter: blur(8px);
+}
+.profile-extra-info {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 10px 0 2px;
+}
+.profile-extra-info span,
+.profile-extra-info a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+  padding: 5px 9px;
+  border: 1px solid #e5e5e5;
+  border-radius: 999px;
+  color: #262626;
+  text-decoration: none;
+  font-size: 12px;
+  background: #fff;
+}
+.item-caption-field {
+  display: grid;
+  gap: 6px;
+  margin-top: 10px;
+  font-size: 12px;
+  color: #737373;
+}
+.item-caption-field input {
+  width: 100%;
+  min-height: 38px;
+  border: 1px solid #dedede;
+  border-radius: 8px;
+  padding: 8px 10px;
+  color: #111;
+  background: #fff;
+}
+.story-music-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: rgba(255,255,255,0.82);
+}
+.action-bar button.like-active,
+.post-card .action-bar button.like-active,
+.detail-panel .action-bar button.like-active {
+  background: #fff2f2;
+  color: #d71933;
+  border-color: #efb7bf;
+}
+
+.action-bar button.like-active svg,
+.post-card .action-bar button.like-active svg,
+.detail-panel .action-bar button.like-active svg {
+  fill: #d71933;
+  stroke: #d71933;
+}
+
+.action-bar button.repost-active,
+.post-card .action-bar button.repost-active,
+.detail-panel .action-bar button.repost-active {
+  background: #0b0b0b;
+  color: #fff;
+  border-color: #0b0b0b;
+  box-shadow: 0 0 0 2px rgba(11, 11, 11, 0.08);
+}
+
+.action-bar button.repost-active svg,
+.post-card .action-bar button.repost-active svg,
+.detail-panel .action-bar button.repost-active svg {
+  stroke-width: 2.8;
+}
+/* Keep home stories constrained to the feed column so they cannot overlap suggestions. */
+.feed-screen,
+.home-sticky,
+.home-sticky .story-row-wrap,
+.home-sticky .story-strip {
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.home-sticky {
+  width: 100%;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.home-sticky .story-row-wrap {
+  width: 100%;
+  overflow: hidden;
+  contain: inline-size;
+}
+
+.home-sticky .story-strip {
+  display: flex;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-inline: contain;
+}
+
+.home-sticky .story-item {
+  flex: 0 0 84px;
+}
+
+.home-sticky .story-strip::before {
+  content: none;
+}
+
+.home-sticky .story-avatar {
+  width: 68px;
+  height: auto;
+  aspect-ratio: 1 / 1;
+  flex: 0 0 68px;
+  box-sizing: border-box;
+  overflow: visible;
+}
+
+.home-sticky .story-avatar > img,
+.home-sticky .story-avatar > .avatar-fallback {
+  width: 100%;
+  height: 100%;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+  border-radius: 50%;
+}
+
+.story-scroll-button {
+  z-index: 6;
+}
+
+@media (min-width: 1280px) {
+  .home-shell .app-main,
+  .home-shell .feed-screen,
+  .home-shell .home-sticky {
+    width: 100%;
+    max-width: 630px;
+  }
+
+  .home-shell .post-stack,
+  .home-shell .end-feed,
+  .home-shell .feed-state,
+  .home-shell .skeleton-stack {
+    width: 100%;
+    max-width: 550px;
+  }
+}

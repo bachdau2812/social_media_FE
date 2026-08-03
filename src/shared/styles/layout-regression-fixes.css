@@ -1,0 +1,30 @@
+.nav-rail {
+  border-right: 0;
+}
+
+.feed-tabs {
+  justify-content: center;
+}
+
+@media (min-width: 768px) {
+  .nav-rail,
+  .home-shell .nav-rail {
+    display: grid;
+    grid-template-rows: 1fr auto 1fr;
+    align-items: center;
+    gap: 0;
+  }
+
+  .nav-rail .nav-list {
+    grid-row: 2;
+    width: 100%;
+    align-self: center;
+  }
+
+  .nav-rail .logout-nav {
+    grid-row: 3;
+    align-self: end;
+    margin-top: 0;
+  }
+}
+

@@ -1,0 +1,271 @@
+.section {
+  position: relative;
+  width: 100%;
+  padding: 14px 0;
+  border-top: 1px solid #e7e8e9;
+  border-bottom: 1px solid #e7e8e9;
+  color: #111315;
+}
+
+.header,
+.dialog > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.header > div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.header span {
+  color: #74787d;
+  font-size: 13px;
+}
+
+.header button,
+.dialog > header button,
+.railControls button {
+  display: inline-grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: #111315;
+  cursor: pointer;
+}
+
+.header button:hover,
+.dialog > header button:hover,
+.railControls button:hover {
+  background: #ededee;
+}
+
+.railControls {
+  display: flex;
+  justify-content: flex-end;
+  gap: 2px;
+  margin: 6px 0;
+}
+
+.rail {
+  display: grid;
+  overflow-x: auto;
+  grid-auto-columns: minmax(174px, 190px);
+  grid-auto-flow: column;
+  gap: 10px;
+  padding: 2px 1px 8px;
+  scroll-snap-type: x proximity;
+  scrollbar-width: thin;
+}
+
+.card {
+  display: flex;
+  min-height: 222px;
+  padding: 14px;
+  border: 1px solid #e1e2e3;
+  border-radius: 8px;
+  background: #fff;
+  flex-direction: column;
+  justify-content: space-between;
+  scroll-snap-align: start;
+}
+
+.identityButton {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  flex-direction: column;
+}
+
+.avatar,
+.avatarFallback {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+}
+
+.avatar {
+  object-fit: cover;
+}
+
+.avatarFallback {
+  display: grid;
+  place-items: center;
+  background: #e8e9ea;
+  color: #4d5155;
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.identityButton strong {
+  overflow: hidden;
+  max-width: 100%;
+  margin-top: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.identityButton span,
+.identityButton small {
+  overflow: hidden;
+  max-width: 100%;
+  color: #74787d;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.followButton,
+.followingButton,
+.state button {
+  min-height: 38px;
+  padding: 0 13px;
+  border-radius: 7px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.followButton {
+  border: 1px solid #111315;
+  background: #111315;
+  color: #fff;
+}
+
+.followingButton,
+.state button {
+  border: 1px solid #d7d9db;
+  background: #fff;
+  color: #111315;
+}
+
+.viewAll {
+  min-height: 40px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #565a5f;
+  font: inherit;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.viewAll:hover {
+  color: #111315;
+  text-decoration: underline;
+}
+
+.state,
+.skeleton {
+  display: flex;
+  min-height: 150px;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 10px;
+  color: #74787d;
+}
+
+.skeleton {
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+.dialogBackdrop {
+  position: fixed;
+  z-index: 1400;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgb(9 12 15 / 42%);
+}
+
+.dialog {
+  display: flex;
+  overflow: hidden;
+  width: min(720px, 100%);
+  max-height: min(720px, calc(100vh - 40px));
+  border: 1px solid #dfe0e2;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 18px 56px rgb(9 12 15 / 18%);
+  flex-direction: column;
+}
+
+.dialog > header {
+  min-height: 62px;
+  padding: 0 18px;
+  border-bottom: 1px solid #e7e8e9;
+}
+
+.dialogGrid {
+  display: grid;
+  overflow-y: auto;
+  padding: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(174px, 1fr));
+  gap: 10px;
+}
+
+.header button:focus-visible,
+.dialog button:focus-visible,
+.railControls button:focus-visible,
+.identityButton:focus-visible,
+.followButton:focus-visible,
+.followingButton:focus-visible,
+.viewAll:focus-visible,
+.state button:focus-visible {
+  outline: 2px solid #111315;
+  outline-offset: 2px;
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.45;
+  }
+}
+
+@media (max-width: 640px) {
+  .railControls {
+    display: none;
+  }
+
+  .rail {
+    grid-auto-columns: minmax(156px, 174px);
+  }
+
+  .dialogBackdrop {
+    align-items: end;
+    padding: 0;
+  }
+
+  .dialog {
+    width: 100%;
+    max-height: 80vh;
+    border-radius: 8px 8px 0 0;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .dialogGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+  }
+}

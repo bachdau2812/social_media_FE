@@ -1,0 +1,41 @@
+/* Additional mobile navigation only; desktop remains entirely owned by the
+   original settings-screen.css. */
+.settings-mobile-detail-header { display: none; }
+
+@media (max-width: 767px) {
+  .settings-feature-layout > main { display: none; }
+  .settings-feature-layout.detail-open > nav { display: none; }
+  .settings-feature-layout.detail-open > main { display: block; }
+
+  .settings-mobile-detail-header {
+    position: sticky;
+    top: var(--app-mobile-header-height, 0px);
+    z-index: 3;
+    min-height: 52px;
+    display: grid;
+    grid-template-columns: 44px minmax(0, 1fr) 44px;
+    align-items: center;
+    margin: -8px 0 16px;
+    border-bottom: 1px solid var(--app-border, #e5e5e5);
+    background: var(--app-surface, #fff);
+  }
+  .settings-mobile-detail-header button {
+    width: 44px;
+    height: 44px;
+    border: 0;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    background: transparent;
+    color: var(--app-text, #111);
+  }
+  .settings-mobile-detail-header strong {
+    min-width: 0;
+    overflow: hidden;
+    text-align: center;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .settings-feature-row,
+  .settings-feature-choice button { min-height: 44px; }
+}

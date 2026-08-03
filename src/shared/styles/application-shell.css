@@ -1,0 +1,175 @@
+/* Responsive shell ownership. Feature styles may size their own content, but
+   they must not redefine the application columns or reserve navigation space. */
+.app-shell-root {
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+.mobile-app-header { display: none; }
+
+.mobile-more-anchor { position: relative; }
+.mobile-more-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: var(--app-z-popover);
+  width: min(240px, calc(100vw - 24px));
+  padding: 6px;
+  border: 1px solid var(--app-border);
+  border-radius: var(--app-radius-lg);
+  background: var(--app-surface-raised);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.16);
+}
+.mobile-more-menu button {
+  width: 100%;
+  min-height: var(--app-touch-target);
+  border: 0;
+  border-radius: var(--app-radius-md);
+  padding: 0 12px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: transparent;
+  color: var(--app-text);
+  text-align: left;
+}
+.mobile-more-menu button:hover,
+.mobile-more-menu button:active { background: var(--app-surface-subtle); }
+
+.nav-icon-wrap,
+.mobile-nav-icon { position: relative; display: grid; place-items: center; }
+.nav-unread-badge {
+  position: absolute;
+  top: -9px;
+  left: 12px;
+  min-width: 18px;
+  height: 18px;
+  border: 2px solid var(--app-surface);
+  border-radius: 999px;
+  padding: 0 4px;
+  background: #e5484d;
+  color: #fff;
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 700;
+  line-height: 14px;
+  text-align: center;
+}
+
+@media (min-width: 768px) {
+  .app-shell {
+    width: 100%;
+    min-width: 0;
+    min-height: 100vh;
+    min-height: 100dvh;
+    padding: 0 24px 0 var(--nav-collapsed-width, 56px);
+    display: grid;
+    grid-template-columns: minmax(0, 760px);
+    justify-content: center;
+    gap: 0;
+  }
+
+  .app-shell > .nav-rail {
+    position: fixed;
+    inset: 0 auto 0 0;
+    z-index: var(--app-z-navigation, 100);
+    height: 100vh;
+    height: 100dvh;
+  }
+
+  .app-shell > .app-main {
+    width: 100%;
+    min-width: 0;
+    max-width: 760px;
+  }
+
+  .right-rail { display: none; }
+}
+
+@media (min-width: 1200px) {
+  .home-shell {
+    grid-template-columns: minmax(0, 630px) minmax(260px, 330px);
+    gap: 32px;
+  }
+
+  .home-shell > .app-main { max-width: 630px; }
+  .home-shell > .right-rail { display: block; }
+}
+
+@media (max-width: 767px) {
+  .app-shell {
+    display: block;
+    min-height: 100vh;
+    min-height: 100dvh;
+    padding:
+      0
+      max(12px, var(--app-safe-right))
+      calc(var(--app-mobile-nav-height) + var(--app-safe-bottom) + 12px)
+      max(12px, var(--app-safe-left));
+  }
+
+  .app-main,
+  .home-shell .app-main {
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .mobile-app-header {
+    position: sticky;
+    top: 0;
+    z-index: var(--app-z-sticky);
+    min-height: calc(var(--app-mobile-header-height) + var(--app-safe-top));
+    margin: 0 calc(-1 * max(12px, var(--app-safe-right))) 0 calc(-1 * max(12px, var(--app-safe-left)));
+    padding: var(--app-safe-top) max(8px, var(--app-safe-right)) 0 max(8px, var(--app-safe-left));
+    border-bottom: 1px solid var(--app-border);
+    display: grid;
+    grid-template-columns: var(--app-touch-target) minmax(0, 1fr) var(--app-touch-target);
+    align-items: center;
+    gap: 8px;
+    background: color-mix(in srgb, var(--app-surface) 94%, transparent);
+    backdrop-filter: blur(14px);
+  }
+  .mobile-app-header > strong {
+    min-width: 0;
+    overflow: hidden;
+    text-align: center;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .mobile-header-action {
+    width: var(--app-touch-target);
+    height: var(--app-touch-target);
+    border: 0;
+    border-radius: 50%;
+    padding: 0;
+    display: grid;
+    place-items: center;
+    background: transparent;
+    color: var(--app-text);
+  }
+
+  .mobile-nav {
+    right: 0;
+    bottom: 0;
+    left: 0;
+    height: auto;
+    min-height: calc(var(--app-mobile-nav-height) + var(--app-safe-bottom));
+    padding: 0 var(--app-safe-right) var(--app-safe-bottom) var(--app-safe-left);
+    grid-template-columns: repeat(5, minmax(var(--app-touch-target), 1fr));
+    background: color-mix(in srgb, var(--app-surface) 96%, transparent);
+    backdrop-filter: blur(16px);
+  }
+  .mobile-nav button {
+    min-width: var(--app-touch-target);
+    min-height: var(--app-touch-target);
+    display: grid;
+    place-items: center;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nav-rail { transition: none; }
+}

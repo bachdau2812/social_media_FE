@@ -1,0 +1,330 @@
+[2m14:48:53[22m [31m[1m[vite][22m[39m [31mInternal server error: D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\src\App.tsx: Missing semicolon. (33:83)
+
+[0m [90m 31 |[31m   [36mconst[31m [notifications[33m,[31m setNotifications] [33m=[31m useState[33m<[31m[33mNotificationItem[31m[][33m>[31m([])[33m;[31m
+ [90m 32 |[31m   [36mconst[31m [library[33m,[31m setLibrary] [33m=[31m useState[33m<[31m[33mLibraryState[31m[33m>[31m(emptyLibrary)[33m;[31m
+[31m[1m>[22m[31m[90m 33 |[31m   [36mconst[31m [settings[33m,[31m setSettingsState] [33m=[31m useState[33m<[31m[33mSettingsState[31m[33m>[31m(defaultSettings)[33m;[31m[32m`r`[31mn  [36mconst[31m [suggestions[33m,[31m setSuggestions] [33m=[31m useState[33m<[31m[33mProfile[31m[][33m>[31m([])[33m;[31m
+ [90m    |[31m                                                                                    [31m[1m^[22m[31m
+ [90m 34 |[31m   [36mconst[31m [selectedPost[33m,[31m setSelectedPost] [33m=[31m useState[33m<[31m[33mPost[31m [33m|[31m [36mnull[31m[33m>[31m([36mnull[31m)[33m;[31m
+ [90m 35 |[31m   [36mconst[31m [status[33m,[31m setStatus] [33m=[31m useState[33m<[31m[33mLoadState[31m[33m>[31m([32m"idle"[31m)[33m;[31m
+ [90m 36 |[31m   [36mconst[31m [errorText[33m,[31m setErrorText] [33m=[31m useState([32m""[31m)[33m;[31m[0m[39m
+  Plugin: [35mvite:react-babel[39m
+  File: [36mD:/Learning/Javaaa/Learn_Backend/Spring_WebFlux/appp/social_media_FE/src/App.tsx[39m:33:83
+[33m  31 |    const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  32 |    const [library, setLibrary] = useState<LibraryState>(emptyLibrary);
+  33 |    const [settings, setSettingsState] = useState<SettingsState>(defaultSettings);`r`n  const [suggestions, setSuggestions] = useState<Profile[]>([]);
+     |                                                                                     ^
+  34 |    const [selectedPost, setSelectedPost] = useState<Post | null>(null);
+  35 |    const [status, setStatus] = useState<LoadState>("idle");[39m
+      at constructor (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:365:19)
+      at TypeScriptParserMixin.raise (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:6616:19)
+      at TypeScriptParserMixin.semicolon (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:6912:10)
+      at TypeScriptParserMixin.parseExpressionStatement (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:13302:10)
+      at TypeScriptParserMixin.parseStatementContent (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:12916:19)
+      at TypeScriptParserMixin.parseStatementContent (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:9525:18)
+      at TypeScriptParserMixin.parseStatementLike (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:12784:17)
+      at TypeScriptParserMixin.parseStatementListItem (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:12764:17)
+      at TypeScriptParserMixin.parseBlockOrModuleBlockBody (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:13333:61)
+      at TypeScriptParserMixin.parseBlockBody (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:13326:10)
+      at TypeScriptParserMixin.parseBlock (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:13314:10)
+      at TypeScriptParserMixin.parseFunctionBody (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:12117:24)
+      at TypeScriptParserMixin.parseFunctionBodyAndFinish (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:12103:10)
+      at TypeScriptParserMixin.parseFunctionBodyAndFinish (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:9189:18)
+      at D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:13462:12
+      at TypeScriptParserMixin.withSmartMixTopicForbiddingContext (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:12420:14)
+      at TypeScriptParserMixin.parseFunction (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:13461:10)
+      at TypeScriptParserMixin.parseExportDefaultExpression (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:13924:19)
+      at TypeScriptParserMixin.parseExportDefaultExpression (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:9419:18)
+      at TypeScriptParserMixin.parseExport (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:13845:25)
+      at TypeScriptParserMixin.parseExport (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:9402:20)
+      at TypeScriptParserMixin.parseStatementContent (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:12895:27)
+      at TypeScriptParserMixin.parseStatementContent (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:9525:18)
+      at TypeScriptParserMixin.parseStatementLike (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:12784:17)
+      at TypeScriptParserMixin.parseModuleItem (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:12761:17)
+      at TypeScriptParserMixin.parseBlockOrModuleBlockBody (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:13333:36)
+      at TypeScriptParserMixin.parseBlockBody (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:13326:10)
+      at TypeScriptParserMixin.parseProgram (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:12639:10)
+      at TypeScriptParserMixin.parseTopLevel (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:12629:25)
+      at TypeScriptParserMixin.parse (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:14505:25)
+      at TypeScriptParserMixin.parse (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:10143:18)
+      at parse (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:14539:38)
+      at parser (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\core\lib\parser\index.js:41:34)
+      at parser.next (<anonymous>)
+      at normalizeFile (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\core\lib\transformation\normalize-file.js:51:37)
+      at normalizeFile.next (<anonymous>)
+      at run (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\core\lib\transformation\index.js:22:50)
+      at run.next (<anonymous>)
+      at transform (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\core\lib\transform.js:22:33)
+      at transform.next (<anonymous>)
+      at step (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\gensync\index.js:261:32)
+      at D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\gensync\index.js:273:13
+      at async.call.result.err.err (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\gensync\index.js:223:11)
+      at D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\gensync\index.js:189:28
+      at D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\core\lib\gensync-utils\async.js:67:7
+      at D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\gensync\index.js:113:33
+      at step (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\gensync\index.js:287:14)
+      at D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\gensync\index.js:273:13
+      at async.call.result.err.err (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\gensync\index.js:223:11)
+[2m14:48:53[22m [31m[1m[vite][22m[39m [31mInternal server error: D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\src\App.tsx: Missing semicolon. (33:83)
+
+[0m [90m 31 |[31m   [36mconst[31m [notifications[33m,[31m setNotifications] [33m=[31m useState[33m<[31m[33mNotificationItem[31m[][33m>[31m([])[33m;[31m
+ [90m 32 |[31m   [36mconst[31m [library[33m,[31m setLibrary] [33m=[31m useState[33m<[31m[33mLibraryState[31m[33m>[31m(emptyLibrary)[33m;[31m
+[31m[1m>[22m[31m[90m 33 |[31m   [36mconst[31m [settings[33m,[31m setSettingsState] [33m=[31m useState[33m<[31m[33mSettingsState[31m[33m>[31m(defaultSettings)[33m;[31m[32m`r`[31mn  [36mconst[31m [suggestions[33m,[31m setSuggestions] [33m=[31m useState[33m<[31m[33mProfile[31m[][33m>[31m([])[33m;[31m
+ [90m    |[31m                                                                                    [31m[1m^[22m[31m
+ [90m 34 |[31m   [36mconst[31m [selectedPost[33m,[31m setSelectedPost] [33m=[31m useState[33m<[31m[33mPost[31m [33m|[31m [36mnull[31m[33m>[31m([36mnull[31m)[33m;[31m
+ [90m 35 |[31m   [36mconst[31m [status[33m,[31m setStatus] [33m=[31m useState[33m<[31m[33mLoadState[31m[33m>[31m([32m"idle"[31m)[33m;[31m
+ [90m 36 |[31m   [36mconst[31m [errorText[33m,[31m setErrorText] [33m=[31m useState([32m""[31m)[33m;[31m[0m[39m
+  Plugin: [35mvite:react-babel[39m
+  File: [36mD:/Learning/Javaaa/Learn_Backend/Spring_WebFlux/appp/social_media_FE/src/App.tsx[39m:33:83
+[33m  31 |    const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  32 |    const [library, setLibrary] = useState<LibraryState>(emptyLibrary);
+  33 |    const [settings, setSettingsState] = useState<SettingsState>(defaultSettings);`r`n  const [suggestions, setSuggestions] = useState<Profile[]>([]);
+     |                                                                                     ^
+  34 |    const [selectedPost, setSelectedPost] = useState<Post | null>(null);
+  35 |    const [status, setStatus] = useState<LoadState>("idle");[39m
+      at constructor (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:365:19)
+      at TypeScriptParserMixin.raise (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:6616:19)
+      at TypeScriptParserMixin.semicolon (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:6912:10)
+      at TypeScriptParserMixin.parseExpressionStatement (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:13302:10)
+      at TypeScriptParserMixin.parseStatementContent (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:12916:19)
+      at TypeScriptParserMixin.parseStatementContent (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:9525:18)
+      at TypeScriptParserMixin.parseStatementLike (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:12784:17)
+      at TypeScriptParserMixin.parseStatementListItem (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:12764:17)
+      at TypeScriptParserMixin.parseBlockOrModuleBlockBody (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:13333:61)
+      at TypeScriptParserMixin.parseBlockBody (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:13326:10)
+      at TypeScriptParserMixin.parseBlock (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:13314:10)
+      at TypeScriptParserMixin.parseFunctionBody (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:12117:24)
+      at TypeScriptParserMixin.parseFunctionBodyAndFinish (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:12103:10)
+      at TypeScriptParserMixin.parseFunctionBodyAndFinish (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:9189:18)
+      at D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:13462:12
+      at TypeScriptParserMixin.withSmartMixTopicForbiddingContext (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:12420:14)
+      at TypeScriptParserMixin.parseFunction (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:13461:10)
+      at TypeScriptParserMixin.parseExportDefaultExpression (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:13924:19)
+      at TypeScriptParserMixin.parseExportDefaultExpression (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:9419:18)
+      at TypeScriptParserMixin.parseExport (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:13845:25)
+      at TypeScriptParserMixin.parseExport (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:9402:20)
+      at TypeScriptParserMixin.parseStatementContent (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:12895:27)
+      at TypeScriptParserMixin.parseStatementContent (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:9525:18)
+      at TypeScriptParserMixin.parseStatementLike (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:12784:17)
+      at TypeScriptParserMixin.parseModuleItem (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:12761:17)
+      at TypeScriptParserMixin.parseBlockOrModuleBlockBody (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:13333:36)
+      at TypeScriptParserMixin.parseBlockBody (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:13326:10)
+      at TypeScriptParserMixin.parseProgram (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:12639:10)
+      at TypeScriptParserMixin.parseTopLevel (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:12629:25)
+      at TypeScriptParserMixin.parse (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:14505:25)
+      at TypeScriptParserMixin.parse (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:10143:18)
+      at parse (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:14539:38)
+      at parser (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\core\lib\parser\index.js:41:34)
+      at parser.next (<anonymous>)
+      at normalizeFile (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\core\lib\transformation\normalize-file.js:51:37)
+      at normalizeFile.next (<anonymous>)
+      at run (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\core\lib\transformation\index.js:22:50)
+      at run.next (<anonymous>)
+      at transform (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\core\lib\transform.js:22:33)
+      at transform.next (<anonymous>)
+      at step (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\gensync\index.js:261:32)
+      at D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\gensync\index.js:273:13
+      at async.call.result.err.err (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\gensync\index.js:223:11)
+      at D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\gensync\index.js:189:28
+      at D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\core\lib\gensync-utils\async.js:67:7
+      at D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\gensync\index.js:113:33
+      at step (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\gensync\index.js:287:14)
+      at D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\gensync\index.js:273:13
+      at async.call.result.err.err (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\gensync\index.js:223:11)
+[2m14:48:53[22m [31m[1m[vite][22m[39m [31mInternal server error: D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\src\App.tsx: Missing semicolon. (33:83)
+
+[0m [90m 31 |[31m   [36mconst[31m [notifications[33m,[31m setNotifications] [33m=[31m useState[33m<[31m[33mNotificationItem[31m[][33m>[31m([])[33m;[31m
+ [90m 32 |[31m   [36mconst[31m [library[33m,[31m setLibrary] [33m=[31m useState[33m<[31m[33mLibraryState[31m[33m>[31m(emptyLibrary)[33m;[31m
+[31m[1m>[22m[31m[90m 33 |[31m   [36mconst[31m [settings[33m,[31m setSettingsState] [33m=[31m useState[33m<[31m[33mSettingsState[31m[33m>[31m(defaultSettings)[33m;[31m[32m`r`[31mn  [36mconst[31m [suggestions[33m,[31m setSuggestions] [33m=[31m useState[33m<[31m[33mProfile[31m[][33m>[31m([])[33m;[31m
+ [90m    |[31m                                                                                    [31m[1m^[22m[31m
+ [90m 34 |[31m   [36mconst[31m [selectedPost[33m,[31m setSelectedPost] [33m=[31m useState[33m<[31m[33mPost[31m [33m|[31m [36mnull[31m[33m>[31m([36mnull[31m)[33m;[31m
+ [90m 35 |[31m   [36mconst[31m [status[33m,[31m setStatus] [33m=[31m useState[33m<[31m[33mLoadState[31m[33m>[31m([32m"idle"[31m)[33m;[31m
+ [90m 36 |[31m   [36mconst[31m [errorText[33m,[31m setErrorText] [33m=[31m useState([32m""[31m)[33m;[31m[0m[39m
+  Plugin: [35mvite:react-babel[39m
+  File: [36mD:/Learning/Javaaa/Learn_Backend/Spring_WebFlux/appp/social_media_FE/src/App.tsx[39m:33:83
+[33m  31 |    const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  32 |    const [library, setLibrary] = useState<LibraryState>(emptyLibrary);
+  33 |    const [settings, setSettingsState] = useState<SettingsState>(defaultSettings);`r`n  const [suggestions, setSuggestions] = useState<Profile[]>([]);
+     |                                                                                     ^
+  34 |    const [selectedPost, setSelectedPost] = useState<Post | null>(null);
+  35 |    const [status, setStatus] = useState<LoadState>("idle");[39m
+      at constructor (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:365:19)
+      at TypeScriptParserMixin.raise (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:6616:19)
+      at TypeScriptParserMixin.semicolon (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:6912:10)
+      at TypeScriptParserMixin.parseExpressionStatement (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:13302:10)
+      at TypeScriptParserMixin.parseStatementContent (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:12916:19)
+      at TypeScriptParserMixin.parseStatementContent (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:9525:18)
+      at TypeScriptParserMixin.parseStatementLike (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:12784:17)
+      at TypeScriptParserMixin.parseStatementListItem (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:12764:17)
+      at TypeScriptParserMixin.parseBlockOrModuleBlockBody (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:13333:61)
+      at TypeScriptParserMixin.parseBlockBody (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:13326:10)
+      at TypeScriptParserMixin.parseBlock (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:13314:10)
+      at TypeScriptParserMixin.parseFunctionBody (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:12117:24)
+      at TypeScriptParserMixin.parseFunctionBodyAndFinish (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:12103:10)
+      at TypeScriptParserMixin.parseFunctionBodyAndFinish (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:9189:18)
+      at D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:13462:12
+      at TypeScriptParserMixin.withSmartMixTopicForbiddingContext (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:12420:14)
+      at TypeScriptParserMixin.parseFunction (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:13461:10)
+      at TypeScriptParserMixin.parseExportDefaultExpression (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:13924:19)
+      at TypeScriptParserMixin.parseExportDefaultExpression (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:9419:18)
+      at TypeScriptParserMixin.parseExport (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:13845:25)
+      at TypeScriptParserMixin.parseExport (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:9402:20)
+      at TypeScriptParserMixin.parseStatementContent (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:12895:27)
+      at TypeScriptParserMixin.parseStatementContent (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:9525:18)
+      at TypeScriptParserMixin.parseStatementLike (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:12784:17)
+      at TypeScriptParserMixin.parseModuleItem (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:12761:17)
+      at TypeScriptParserMixin.parseBlockOrModuleBlockBody (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:13333:36)
+      at TypeScriptParserMixin.parseBlockBody (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:13326:10)
+      at TypeScriptParserMixin.parseProgram (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:12639:10)
+      at TypeScriptParserMixin.parseTopLevel (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:12629:25)
+      at TypeScriptParserMixin.parse (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:14505:25)
+      at TypeScriptParserMixin.parse (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:10143:18)
+      at parse (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:14539:38)
+      at parser (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\core\lib\parser\index.js:41:34)
+      at parser.next (<anonymous>)
+      at normalizeFile (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\core\lib\transformation\normalize-file.js:51:37)
+      at normalizeFile.next (<anonymous>)
+      at run (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\core\lib\transformation\index.js:22:50)
+      at run.next (<anonymous>)
+      at transform (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\core\lib\transform.js:22:33)
+      at transform.next (<anonymous>)
+      at step (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\gensync\index.js:261:32)
+      at D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\gensync\index.js:273:13
+      at async.call.result.err.err (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\gensync\index.js:223:11)
+      at D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\gensync\index.js:189:28
+      at D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\core\lib\gensync-utils\async.js:67:7
+      at D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\gensync\index.js:113:33
+      at step (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\gensync\index.js:287:14)
+      at D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\gensync\index.js:273:13
+      at async.call.result.err.err (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\gensync\index.js:223:11)
+[2m14:48:53[22m [31m[1m[vite][22m[39m [31mInternal server error: D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\src\App.tsx: Missing semicolon. (33:83)
+
+[0m [90m 31 |[31m   [36mconst[31m [notifications[33m,[31m setNotifications] [33m=[31m useState[33m<[31m[33mNotificationItem[31m[][33m>[31m([])[33m;[31m
+ [90m 32 |[31m   [36mconst[31m [library[33m,[31m setLibrary] [33m=[31m useState[33m<[31m[33mLibraryState[31m[33m>[31m(emptyLibrary)[33m;[31m
+[31m[1m>[22m[31m[90m 33 |[31m   [36mconst[31m [settings[33m,[31m setSettingsState] [33m=[31m useState[33m<[31m[33mSettingsState[31m[33m>[31m(defaultSettings)[33m;[31m[32m`r`[31mn  [36mconst[31m [suggestions[33m,[31m setSuggestions] [33m=[31m useState[33m<[31m[33mProfile[31m[][33m>[31m([])[33m;[31m
+ [90m    |[31m                                                                                    [31m[1m^[22m[31m
+ [90m 34 |[31m   [36mconst[31m [selectedPost[33m,[31m setSelectedPost] [33m=[31m useState[33m<[31m[33mPost[31m [33m|[31m [36mnull[31m[33m>[31m([36mnull[31m)[33m;[31m
+ [90m 35 |[31m   [36mconst[31m [status[33m,[31m setStatus] [33m=[31m useState[33m<[31m[33mLoadState[31m[33m>[31m([32m"idle"[31m)[33m;[31m
+ [90m 36 |[31m   [36mconst[31m [errorText[33m,[31m setErrorText] [33m=[31m useState([32m""[31m)[33m;[31m[0m[39m
+  Plugin: [35mvite:react-babel[39m
+  File: [36mD:/Learning/Javaaa/Learn_Backend/Spring_WebFlux/appp/social_media_FE/src/App.tsx[39m:33:83
+[33m  31 |    const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  32 |    const [library, setLibrary] = useState<LibraryState>(emptyLibrary);
+  33 |    const [settings, setSettingsState] = useState<SettingsState>(defaultSettings);`r`n  const [suggestions, setSuggestions] = useState<Profile[]>([]);
+     |                                                                                     ^
+  34 |    const [selectedPost, setSelectedPost] = useState<Post | null>(null);
+  35 |    const [status, setStatus] = useState<LoadState>("idle");[39m
+      at constructor (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:365:19)
+      at TypeScriptParserMixin.raise (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:6616:19)
+      at TypeScriptParserMixin.semicolon (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:6912:10)
+      at TypeScriptParserMixin.parseExpressionStatement (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:13302:10)
+      at TypeScriptParserMixin.parseStatementContent (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:12916:19)
+      at TypeScriptParserMixin.parseStatementContent (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:9525:18)
+      at TypeScriptParserMixin.parseStatementLike (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:12784:17)
+      at TypeScriptParserMixin.parseStatementListItem (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:12764:17)
+      at TypeScriptParserMixin.parseBlockOrModuleBlockBody (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:13333:61)
+      at TypeScriptParserMixin.parseBlockBody (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:13326:10)
+      at TypeScriptParserMixin.parseBlock (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:13314:10)
+      at TypeScriptParserMixin.parseFunctionBody (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:12117:24)
+      at TypeScriptParserMixin.parseFunctionBodyAndFinish (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:12103:10)
+      at TypeScriptParserMixin.parseFunctionBodyAndFinish (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:9189:18)
+      at D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:13462:12
+      at TypeScriptParserMixin.withSmartMixTopicForbiddingContext (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:12420:14)
+      at TypeScriptParserMixin.parseFunction (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:13461:10)
+      at TypeScriptParserMixin.parseExportDefaultExpression (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:13924:19)
+      at TypeScriptParserMixin.parseExportDefaultExpression (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:9419:18)
+      at TypeScriptParserMixin.parseExport (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:13845:25)
+      at TypeScriptParserMixin.parseExport (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:9402:20)
+      at TypeScriptParserMixin.parseStatementContent (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:12895:27)
+      at TypeScriptParserMixin.parseStatementContent (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:9525:18)
+      at TypeScriptParserMixin.parseStatementLike (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:12784:17)
+      at TypeScriptParserMixin.parseModuleItem (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:12761:17)
+      at TypeScriptParserMixin.parseBlockOrModuleBlockBody (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:13333:36)
+      at TypeScriptParserMixin.parseBlockBody (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:13326:10)
+      at TypeScriptParserMixin.parseProgram (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:12639:10)
+      at TypeScriptParserMixin.parseTopLevel (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:12629:25)
+      at TypeScriptParserMixin.parse (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:14505:25)
+      at TypeScriptParserMixin.parse (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:10143:18)
+      at parse (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:14539:38)
+      at parser (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\core\lib\parser\index.js:41:34)
+      at parser.next (<anonymous>)
+      at normalizeFile (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\core\lib\transformation\normalize-file.js:51:37)
+      at normalizeFile.next (<anonymous>)
+      at run (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\core\lib\transformation\index.js:22:50)
+      at run.next (<anonymous>)
+      at transform (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\core\lib\transform.js:22:33)
+      at transform.next (<anonymous>)
+      at step (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\gensync\index.js:261:32)
+      at D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\gensync\index.js:273:13
+      at async.call.result.err.err (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\gensync\index.js:223:11)
+      at D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\gensync\index.js:189:28
+      at D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\core\lib\gensync-utils\async.js:67:7
+      at D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\gensync\index.js:113:33
+      at step (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\gensync\index.js:287:14)
+      at D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\gensync\index.js:273:13
+      at async.call.result.err.err (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\gensync\index.js:223:11)
+[2m14:48:53[22m [31m[1m[vite][22m[39m [31mInternal server error: D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\src\App.tsx: Missing semicolon. (33:83)
+
+[0m [90m 31 |[31m   [36mconst[31m [notifications[33m,[31m setNotifications] [33m=[31m useState[33m<[31m[33mNotificationItem[31m[][33m>[31m([])[33m;[31m
+ [90m 32 |[31m   [36mconst[31m [library[33m,[31m setLibrary] [33m=[31m useState[33m<[31m[33mLibraryState[31m[33m>[31m(emptyLibrary)[33m;[31m
+[31m[1m>[22m[31m[90m 33 |[31m   [36mconst[31m [settings[33m,[31m setSettingsState] [33m=[31m useState[33m<[31m[33mSettingsState[31m[33m>[31m(defaultSettings)[33m;[31m[32m`r`[31mn  [36mconst[31m [suggestions[33m,[31m setSuggestions] [33m=[31m useState[33m<[31m[33mProfile[31m[][33m>[31m([])[33m;[31m
+ [90m    |[31m                                                                                    [31m[1m^[22m[31m
+ [90m 34 |[31m   [36mconst[31m [selectedPost[33m,[31m setSelectedPost] [33m=[31m useState[33m<[31m[33mPost[31m [33m|[31m [36mnull[31m[33m>[31m([36mnull[31m)[33m;[31m
+ [90m 35 |[31m   [36mconst[31m [status[33m,[31m setStatus] [33m=[31m useState[33m<[31m[33mLoadState[31m[33m>[31m([32m"idle"[31m)[33m;[31m
+ [90m 36 |[31m   [36mconst[31m [errorText[33m,[31m setErrorText] [33m=[31m useState([32m""[31m)[33m;[31m[0m[39m
+  Plugin: [35mvite:react-babel[39m
+  File: [36mD:/Learning/Javaaa/Learn_Backend/Spring_WebFlux/appp/social_media_FE/src/App.tsx[39m:33:83
+[33m  31 |    const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  32 |    const [library, setLibrary] = useState<LibraryState>(emptyLibrary);
+  33 |    const [settings, setSettingsState] = useState<SettingsState>(defaultSettings);`r`n  const [suggestions, setSuggestions] = useState<Profile[]>([]);
+     |                                                                                     ^
+  34 |    const [selectedPost, setSelectedPost] = useState<Post | null>(null);
+  35 |    const [status, setStatus] = useState<LoadState>("idle");[39m
+      at constructor (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:365:19)
+      at TypeScriptParserMixin.raise (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:6616:19)
+      at TypeScriptParserMixin.semicolon (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:6912:10)
+      at TypeScriptParserMixin.parseExpressionStatement (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:13302:10)
+      at TypeScriptParserMixin.parseStatementContent (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:12916:19)
+      at TypeScriptParserMixin.parseStatementContent (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:9525:18)
+      at TypeScriptParserMixin.parseStatementLike (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:12784:17)
+      at TypeScriptParserMixin.parseStatementListItem (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:12764:17)
+      at TypeScriptParserMixin.parseBlockOrModuleBlockBody (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:13333:61)
+      at TypeScriptParserMixin.parseBlockBody (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:13326:10)
+      at TypeScriptParserMixin.parseBlock (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:13314:10)
+      at TypeScriptParserMixin.parseFunctionBody (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:12117:24)
+      at TypeScriptParserMixin.parseFunctionBodyAndFinish (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:12103:10)
+      at TypeScriptParserMixin.parseFunctionBodyAndFinish (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:9189:18)
+      at D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:13462:12
+      at TypeScriptParserMixin.withSmartMixTopicForbiddingContext (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:12420:14)
+      at TypeScriptParserMixin.parseFunction (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:13461:10)
+      at TypeScriptParserMixin.parseExportDefaultExpression (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:13924:19)
+      at TypeScriptParserMixin.parseExportDefaultExpression (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:9419:18)
+      at TypeScriptParserMixin.parseExport (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:13845:25)
+      at TypeScriptParserMixin.parseExport (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:9402:20)
+      at TypeScriptParserMixin.parseStatementContent (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:12895:27)
+      at TypeScriptParserMixin.parseStatementContent (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:9525:18)
+      at TypeScriptParserMixin.parseStatementLike (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:12784:17)
+      at TypeScriptParserMixin.parseModuleItem (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:12761:17)
+      at TypeScriptParserMixin.parseBlockOrModuleBlockBody (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:13333:36)
+      at TypeScriptParserMixin.parseBlockBody (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:13326:10)
+      at TypeScriptParserMixin.parseProgram (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:12639:10)
+      at TypeScriptParserMixin.parseTopLevel (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:12629:25)
+      at TypeScriptParserMixin.parse (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:14505:25)
+      at TypeScriptParserMixin.parse (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:10143:18)
+      at parse (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\parser\lib\index.js:14539:38)
+      at parser (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\core\lib\parser\index.js:41:34)
+      at parser.next (<anonymous>)
+      at normalizeFile (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\core\lib\transformation\normalize-file.js:51:37)
+      at normalizeFile.next (<anonymous>)
+      at run (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\core\lib\transformation\index.js:22:50)
+      at run.next (<anonymous>)
+      at transform (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\core\lib\transform.js:22:33)
+      at transform.next (<anonymous>)
+      at step (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\gensync\index.js:261:32)
+      at D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\gensync\index.js:273:13
+      at async.call.result.err.err (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\gensync\index.js:223:11)
+      at D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\gensync\index.js:189:28
+      at D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\@babel\core\lib\gensync-utils\async.js:67:7
+      at D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\gensync\index.js:113:33
+      at step (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\gensync\index.js:287:14)
+      at D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\gensync\index.js:273:13
+      at async.call.result.err.err (D:\Learning\Javaaa\Learn_Backend\Spring_WebFlux\appp\social_media_FE\node_modules\gensync\index.js:223:11)

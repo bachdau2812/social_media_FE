@@ -1,0 +1,26 @@
+.story-highlights-section { width: 100%; }
+.story-highlights-layout { position: relative; width: 100%; min-width: 0; }
+.story-highlights-strip { display: flex; width: 100%; min-width: 0; max-width: 100%; justify-content: flex-start; gap: 16px; overflow-x: auto; padding: 10px 2px 14px; scroll-behavior: smooth; scrollbar-width: none; touch-action: pan-x; }
+.story-highlights-strip::-webkit-scrollbar { display: none; }
+.story-highlight-item { display: grid; flex: 0 0 74px; justify-items: center; gap: 7px; min-width: 0; border: 0; padding: 0; background: transparent; color: inherit; }
+.story-highlight-item > span { display: grid; width: 64px; min-width: 64px; max-width: 64px; height: 64px; min-height: 64px; max-height: 64px; aspect-ratio: 1 / 1; place-items: center; overflow: hidden; border: 1px solid var(--app-border); border-radius: 50%; background: var(--app-surface-subtle); }
+.story-highlight-item img { width: 100%; height: 100%; object-fit: cover; }
+.story-highlight-item small { width: 100%; overflow: hidden; text-align: center; text-overflow: ellipsis; white-space: nowrap; }
+.story-highlight-scroll-button { position: absolute; top: 28px; z-index: 2; display: grid; width: 30px; height: 30px; place-items: center; border: 1px solid var(--app-border); border-radius: 50%; background: color-mix(in srgb, var(--app-surface) 92%, transparent); color: var(--app-text); box-shadow: var(--app-shadow-sm); }
+.story-highlight-scroll-button.previous { left: 2px; }
+.story-highlight-scroll-button.next { right: 2px; }
+.story-highlight-scroll-button[hidden] { display: none; }
+.story-highlight-skeleton { display: flex; gap: 16px; padding: 10px 0; }
+.story-highlight-skeleton i { width: 64px; height: 64px; border-radius: 50%; background: var(--app-surface-subtle); }
+.highlight-editor-backdrop { position: fixed; inset: 0; z-index: 1700; display: grid; place-items: center; padding: 16px; background: rgb(0 0 0 / 48%); }
+.highlight-editor { display: grid; gap: 14px; width: min(520px, 100%); max-height: min(760px, calc(100dvh - 32px)); overflow: hidden; padding: 16px; border-radius: 8px; background: var(--app-surface); }
+.highlight-editor header, .highlight-editor footer { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.highlight-editor label { display: grid; gap: 6px; }
+.highlight-editor input { min-height: 42px; padding: 8px 10px; border: 1px solid var(--app-border); border-radius: 6px; background: inherit; color: inherit; }
+.highlight-story-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; min-height: 0; overflow-y: auto; }
+.highlight-story-grid button { position: relative; aspect-ratio: 9 / 16; overflow: hidden; background: #111; }
+.highlight-story-grid img, .highlight-story-grid video { width: 100%; height: 100%; object-fit: cover; }
+.highlight-story-grid svg { position: absolute; top: 6px; right: 6px; padding: 3px; border-radius: 50%; background: #fff; color: #111; }
+@media (max-width: 767px) {
+  .story-highlight-scroll-button { display: none; }
+}

@@ -1,0 +1,103 @@
+:root {
+  --app-surface: #ffffff;
+  --app-surface-subtle: #f7f7f7;
+  --app-surface-raised: #ffffff;
+  --app-backdrop: rgba(11, 11, 11, 0.72);
+  --app-text: #151515;
+  --app-text-muted: #737373;
+  --app-border: #e4e4e4;
+  --app-danger: #b42318;
+  --app-success: #16835f;
+  --app-spacing-1: 4px;
+  --app-spacing-2: 8px;
+  --app-spacing-3: 12px;
+  --app-spacing-4: 16px;
+  --app-spacing-5: 20px;
+  --app-spacing-6: 24px;
+  --app-font-xs: 0.75rem;
+  --app-font-sm: 0.875rem;
+  --app-font-md: 1rem;
+  --app-font-lg: 1.25rem;
+  --app-line-normal: 1.5;
+  --app-radius-sm: 6px;
+  --app-radius-md: 8px;
+  --app-radius-lg: 12px;
+  --app-focus: #111111;
+  --app-motion-fast: 160ms;
+  --app-motion-normal: 240ms;
+  --app-touch-target: 44px;
+  --app-mobile-header-height: 56px;
+  --app-mobile-nav-height: 64px;
+  --app-safe-top: env(safe-area-inset-top, 0px);
+  --app-safe-right: env(safe-area-inset-right, 0px);
+  --app-safe-bottom: env(safe-area-inset-bottom, 0px);
+  --app-safe-left: env(safe-area-inset-left, 0px);
+  --app-z-sticky: 100;
+  --app-z-navigation: 1000;
+  --app-z-popover: 1200;
+  --app-z-overlay: 1400;
+  --app-z-toast: 1600;
+}
+
+.app-route-fallback {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: grid;
+  place-content: center;
+  grid-auto-flow: column;
+  gap: 7px;
+  background: var(--surface, #f7f7f5);
+}
+
+.app-route-fallback span {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-muted, #777);
+  animation: route-loading 900ms ease-in-out infinite alternate;
+}
+
+.app-route-fallback span:nth-child(2) { animation-delay: 120ms; }
+.app-route-fallback span:nth-child(3) { animation-delay: 240ms; }
+@keyframes route-loading { to { opacity: .3; transform: translateY(-4px); } }
+
+[data-theme="dark"] {
+  --app-surface: #151515;
+  --app-surface-subtle: #202020;
+  --app-surface-raised: #242424;
+  --app-backdrop: rgba(0, 0, 0, 0.8);
+  --app-text: #f5f5f5;
+  --app-text-muted: #a6a6a6;
+  --app-border: #333333;
+  --app-focus: #ffffff;
+}
+
+.shared-spinner {
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--app-border);
+  border-top-color: var(--app-text);
+  border-radius: 50%;
+  animation: shared-spin 700ms linear infinite;
+}
+
+.shared-state {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  padding: 24px 16px;
+  color: var(--app-text-muted);
+  text-align: center;
+}
+
+.shared-state strong { color: var(--app-text); }
+@keyframes shared-spin { to { transform: rotate(360deg); } }
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --app-motion-fast: 1ms;
+    --app-motion-normal: 1ms;
+  }
+  .shared-spinner { animation-duration: 1400ms; }
+}

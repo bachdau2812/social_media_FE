@@ -1,0 +1,232 @@
+/* Responsive notifications screen. */
+.notifications-screen {
+  width: calc(100% + 24px);
+  margin: 0 -12px;
+  padding: 8px 12px 18px;
+}
+.notifications-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+.notifications-header h2 { margin: 0; font-size: 1.35rem; }
+.notifications-header button,
+.notification-state button,
+.notification-action {
+  min-height: var(--app-touch-target);
+  border: 1px solid #0b0b0b;
+  border-radius: 999px;
+  padding: 0 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: #fff;
+  background: #0b0b0b;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.notifications-header button:disabled { opacity: 0.42; cursor: not-allowed; }
+.notification-filters {
+  position: sticky;
+  top: calc(var(--app-mobile-header-height) + var(--app-safe-top));
+  z-index: calc(var(--app-z-sticky) - 1);
+  display: flex;
+  gap: var(--app-spacing-5);
+  overflow-x: auto;
+  margin: 0 -12px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--app-border);
+  background: var(--app-surface-subtle);
+  scrollbar-width: none;
+}
+.notification-filters::-webkit-scrollbar { display: none; }
+.notification-filters button {
+  min-height: 44px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  padding: 0 2px;
+  color: #737373;
+  background: transparent;
+  font-weight: 650;
+}
+.notification-filters button.active {
+  color: #0b0b0b;
+  border-bottom-color: #0b0b0b;
+}
+.notification-list {
+  display: grid;
+  gap: 22px;
+  padding-top: 18px;
+}
+.notification-group h3 {
+  margin: 0 0 8px;
+  color: #737373;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0;
+}
+.notification-row {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) 44px 44px;
+  align-items: center;
+  gap: 9px;
+  min-height: 76px;
+  border-bottom: 1px solid #e7e7e4;
+  padding: 10px 0;
+}
+.notification-row.unread {
+  margin: 0 -10px;
+  padding-left: 10px;
+  padding-right: 10px;
+  background: #fff;
+}
+.notification-row.read .notification-copy { color: #737373; font-weight: 500; }
+.notification-row.unread .notification-copy { color: #0b0b0b; font-weight: 650; }
+.notification-row.removed { opacity: 0.72; }
+.notification-avatar,
+.notification-thumbnail.empty {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: #0b0b0b;
+  background: #eeeeea;
+}
+.notification-avatar img,
+.notification-avatar .avatar-fallback {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+}
+.notification-copy {
+  min-width: 0;
+  border: 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+  color: #262626;
+  background: transparent;
+  text-align: left;
+  line-height: 1.42;
+}
+.notification-copy span { min-width: 0; }
+.notification-copy strong { font-weight: 800; }
+.notification-copy time,
+.notification-copy em {
+  color: #737373;
+  font-size: 0.8rem;
+  font-style: normal;
+}
+.notification-thumbnail {
+  width: 42px;
+  height: 42px;
+  border-radius: 6px;
+  object-fit: cover;
+  background: #eeeeea;
+}
+.notification-thumbnail.empty { border-radius: 6px; color: #737373; }
+.notification-action {
+  grid-column: 2 / -1;
+  width: max-content;
+  min-height: var(--app-touch-target);
+  padding: 0 12px;
+  font-size: 0.8rem;
+}
+.notification-more {
+  grid-column: 4;
+  grid-row: 1;
+  width: var(--app-touch-target);
+  height: var(--app-touch-target);
+}
+.notification-refresh-error {
+  margin-top: var(--app-spacing-3);
+  padding: var(--app-spacing-3);
+  border: 1px solid color-mix(in srgb, var(--app-danger) 35%, var(--app-border));
+  border-radius: var(--app-radius-md);
+  color: var(--app-danger);
+  background: color-mix(in srgb, var(--app-danger) 7%, var(--app-surface));
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--app-spacing-2);
+  font-size: var(--app-font-sm);
+}
+.notification-refresh-error button {
+  min-width: var(--app-touch-target);
+  min-height: var(--app-touch-target);
+  border: 0;
+  border-radius: var(--app-radius-md);
+  padding-inline: var(--app-spacing-3);
+  color: var(--app-text);
+  background: var(--app-surface-subtle);
+  white-space: nowrap;
+}
+.notification-state {
+  min-height: 260px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 10px;
+  color: #737373;
+  text-align: center;
+}
+.notification-state strong { color: #0b0b0b; }
+.notification-list.loading { gap: 0; }
+.notification-row.skeleton {
+  grid-template-columns: 44px minmax(0, 1fr) 96px;
+  pointer-events: none;
+}
+.notification-row.skeleton span,
+.notification-row.skeleton i,
+.notification-row.skeleton b {
+  display: block;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #eeeeea, #fff, #eeeeea);
+  background-size: 200% 100%;
+  animation: skeleton 1.2s linear infinite;
+}
+.notification-row.skeleton span { width: 42px; height: 42px; }
+.notification-row.skeleton div { display: grid; gap: 8px; }
+.notification-row.skeleton i { width: 88%; height: 12px; }
+.notification-row.skeleton i + i { width: 42%; }
+.notification-row.skeleton b { width: 92px; height: 34px; }
+
+@media (min-width: 768px) {
+  .notifications-screen {
+    width: min(760px, 100%);
+    margin: 0 auto;
+    padding: 22px 0 0;
+  }
+  .notifications-header {
+    align-items: center;
+  }
+  .notifications-header button {
+    min-height: 36px;
+    padding: 0 11px;
+    font-size: 0.8rem;
+  }
+  .notification-filters {
+    top: 0;
+    margin: 0;
+    padding: 0;
+  }
+  .notification-row {
+    grid-template-columns: 44px minmax(0, 1fr) 52px auto 44px;
+    gap: 12px;
+    min-height: 76px;
+  }
+  .notification-action {
+    grid-column: auto;
+    width: auto;
+    min-height: var(--app-touch-target);
+  }
+  .notification-more { grid-column: auto; grid-row: auto; }
+  .notification-avatar,
+  .notification-avatar img,
+  .notification-avatar .avatar-fallback { width: 42px; height: 42px; }
+  .notification-thumbnail { width: 46px; height: 46px; }
+}
