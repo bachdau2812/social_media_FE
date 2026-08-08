@@ -13,3 +13,14 @@ export {
   useMusicSegmentPreview,
   type MusicPreviewTrack,
 } from "./useMusicSegmentPreview";
+export {
+  MUSIC_FETCH_RESULT_EVENT,
+  isMusicDto,
+  isMusicFetchFailedEvent,
+  requestMusicFetch,
+  type MusicDto,
+  type MusicFetchAcceptedResponse,
+  type MusicFetchFailedEvent,
+  type MusicFetchResult,
+  type MusicFetchStatus,
+} from "./musicCatalog";
