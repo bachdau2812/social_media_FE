@@ -2,8 +2,12 @@ import { Archive, Check, ChevronLeft, ChevronRight, ImagePlus, Info, Music2, Pau
 import { ChangeEvent, DragEvent, useEffect, useRef, useState } from "react";
 import { apiGet, apiSend, uploadCloudinaryMedia } from "../../../shared/api";
 import {
+  MUSIC_FETCH_RESULT_EVENT,
   MusicSegmentEditor,
   normalizeMusicSegment,
+  requestMusicFetch,
+  type MusicDto,
+  type MusicFetchResult,
   useMusicSegmentPreview,
 } from "../../../shared/music";
 import { useBodyScrollLock } from "../../../shared/overlays/useBodyScrollLock";
@@ -13,7 +17,6 @@ type Page<T> = { content: T[]; pageNumber?: number; totalPages?: number };
 type DraftSummary = { id: string; draftType: string; thumbnailUrl?: string; mediaCount: number; captionPreview: string; updatedAt: string };
 type CreateStep = 1 | 2 | 3 | 4;
 type PublishStatus = "idle" | "uploading" | "processing" | "publishing" | "success" | "failure" | "draft";
-type MusicDto = { id: string; displayName: string; singleName?: string | null; songUrl: string; duration?: number | null; category?: string | null; displayImages?: string | null };
 type MusicSelection = { id: string; title: string; artist: string; url: string; artwork: string; duration: number };
 type MediaItem = {
   id: string;
@@ -64,6 +67,7 @@ export function PostCreationStudio({ userId, onBack, onClose, onDraftSaved, onPu
   const [sharedEnd, setSharedEnd] = useState(30);
   const [musicQuery, setMusicQuery] = useState("");
   const [tracks, setTracks] = useState<MusicDto[]>([]);
+  const [fetchingTrackIds, setFetchingTrackIds] = useState<Set<string>>(() => new Set());
   const [musicLoading, setMusicLoading] = useState(false);
   const [musicLoadingMore, setMusicLoadingMore] = useState(false);
   const [musicPage, setMusicPage] = useState(0);
@@ -141,6 +145,43 @@ export function PostCreationStudio({ userId, onBack, onClose, onDraftSaved, onPu
     return () => { alive = false; controller.abort(); };
   }, [musicQuery]);
 
+  useEffect(() => {
+    const handleMusicFetchResult = (event: Event) => {
+      const detail = (event as CustomEvent<MusicFetchResult>).detail;
+      if (!detail || (detail.kind !== "success" && detail.kind !== "failure")) return;
+      const trackId = detail.kind === "success" ? detail.music.id : detail.trackId;
+      setFetchingTrackIds((current) => {
+        if (!current.has(trackId)) return current;
+        const next = new Set(current);
+        next.delete(trackId);
+        return next;
+      });
+      if (previewingId === trackId) stopMusicPreview();
+      if (detail.kind === "success") {
+        setTracks((current) => current.map((track) => track.id === trackId ? detail.music : track));
+      } else {
+        window.dispatchEvent(new CustomEvent("app-toast", { detail: detail.message }));
+      }
+    };
+    window.addEventListener(MUSIC_FETCH_RESULT_EVENT, handleMusicFetchResult);
+    return () => window.removeEventListener(MUSIC_FETCH_RESULT_EVENT, handleMusicFetchResult);
+  }, [previewingId, stopMusicPreview]);
+
+  async function fetchTrack(track: MusicDto) {
+    if (track.fetched || fetchingTrackIds.has(track.id)) return;
+    setFetchingTrackIds((current) => new Set(current).add(track.id));
+    try {
+      await requestMusicFetch(track.id);
+    } catch {
+      setFetchingTrackIds((current) => {
+        const next = new Set(current);
+        next.delete(track.id);
+        return next;
+      });
+      window.dispatchEvent(new CustomEvent("app-toast", { detail: "Không thể bắt đầu tải bài hát." }));
+    }
+  }
+
   async function loadMoreTracks() {
     if (musicLoading || musicLoadingMore || !musicHasMore) return;
     const requestVersion = musicRequestVersion.current;
@@ -178,7 +219,7 @@ export function PostCreationStudio({ userId, onBack, onClose, onDraftSaved, onPu
       id: track.id,
       title: track.displayName,
       artist: track.singleName || track.category || "Unknown artist",
-      url: track.songUrl,
+      url: track.songUrl ?? "",
       artwork: track.displayImages || "",
       duration: track.duration || 0
     };
@@ -284,6 +325,7 @@ export function PostCreationStudio({ userId, onBack, onClose, onDraftSaved, onPu
   }
 
   function selectItemMusic(id: string, track: MusicDto) {
+    if (!track.fetched || !track.songUrl) return;
     const music = toMusic(track);
     const end = defaultEnd(music);
     patchItem(id, { music, musicStart: 0, musicEnd: end });
@@ -310,6 +352,7 @@ export function PostCreationStudio({ userId, onBack, onClose, onDraftSaved, onPu
   }
 
   function requestSharedTrack(track: MusicDto) {
+    if (!track.fetched || !track.songUrl) return;
     if (itemMusicCount > 0) {
       setPendingSharedTrack(track);
       return;
@@ -507,7 +550,7 @@ export function PostCreationStudio({ userId, onBack, onClose, onDraftSaved, onPu
                     {!sharedMusic && item.type === "IMAGE" && <div className="accordion-music-editor">
                       {item.music && itemBrowserId !== item.id
                         ? <SelectedTrackEditor music={item.music} start={item.musicStart} end={item.musicEnd} playing={previewingId === item.music.id} onRangeChange={(startValue, endValue) => patchItem(item.id, { musicStart: startValue, musicEnd: endValue })} onPlayToggle={() => togglePreview(item.music!, item.musicStart, item.musicEnd)} onRangeCommit={(startValue, endValue) => togglePreview(item.music!, startValue, endValue, true)} onInteractionStart={stopPreview} onReplace={() => setItemBrowserId(item.id)} onRemove={() => removeItemMusic(item.id)} />
-                        : <TrackBrowser tracks={tracks} query={musicQuery} loading={musicLoading} loadingMore={musicLoadingMore} hasMore={musicHasMore} selectedId={item.music?.id ?? null} previewingId={previewingId} onQueryChange={setMusicQuery} onLoadMore={() => void loadMoreTracks()} onPreview={(track) => togglePreview(toMusic(track))} onSelect={(track) => selectItemMusic(item.id, track)} onClose={() => { if (item.music) setItemBrowserId(null); else setExpandedMusicItemId(null); }} />}
+                        : <TrackBrowser tracks={tracks} query={musicQuery} loading={musicLoading} loadingMore={musicLoadingMore} hasMore={musicHasMore} selectedId={item.music?.id ?? null} previewingId={previewingId} fetchingTrackIds={fetchingTrackIds} onFetch={(track) => void fetchTrack(track)} onQueryChange={setMusicQuery} onLoadMore={() => void loadMoreTracks()} onPreview={(track) => togglePreview(toMusic(track))} onSelect={(track) => selectItemMusic(item.id, track)} onClose={() => { if (item.music) setItemBrowserId(null); else setExpandedMusicItemId(null); }} />}
                     </div>}
                   </div>}
                 </article>;
@@ -532,7 +575,7 @@ export function PostCreationStudio({ userId, onBack, onClose, onDraftSaved, onPu
               {!hasImage
                 ? <div className="shared-music-empty"><span>Music is unavailable for a video-only post.</span></div>
                 : sharedBrowserOpen
-                  ? <TrackBrowser tracks={tracks} query={musicQuery} loading={musicLoading} loadingMore={musicLoadingMore} hasMore={musicHasMore} selectedId={sharedMusic?.id ?? null} previewingId={previewingId} onQueryChange={setMusicQuery} onLoadMore={() => void loadMoreTracks()} onPreview={(track) => togglePreview(toMusic(track))} onSelect={requestSharedTrack} onClose={() => setSharedBrowserOpen(false)} />
+                  ? <TrackBrowser tracks={tracks} query={musicQuery} loading={musicLoading} loadingMore={musicLoadingMore} hasMore={musicHasMore} selectedId={sharedMusic?.id ?? null} previewingId={previewingId} fetchingTrackIds={fetchingTrackIds} onFetch={(track) => void fetchTrack(track)} onQueryChange={setMusicQuery} onLoadMore={() => void loadMoreTracks()} onPreview={(track) => togglePreview(toMusic(track))} onSelect={requestSharedTrack} onClose={() => setSharedBrowserOpen(false)} />
                   : sharedMusic
                     ? <><SelectedTrackEditor music={sharedMusic} start={sharedStart} end={sharedEnd} playing={previewingId === sharedMusic.id} onRangeChange={(startValue, endValue) => { setSharedStart(startValue); setSharedEnd(endValue); }} onPlayToggle={() => togglePreview(sharedMusic, sharedStart, sharedEnd)} onRangeCommit={(startValue, endValue) => togglePreview(sharedMusic, startValue, endValue, true)} onInteractionStart={stopPreview} onReplace={() => setSharedBrowserOpen(true)} onRemove={removeSharedMusic} /><div className="neutral-info-banner"><Info size={16} /><span>This track will play across the complete post. Individual media music controls are hidden while shared music is active.</span></div></>
                     : <div className="shared-music-empty"><span>No shared track is selected. You can assign music separately to each media item in the previous step.</span><div><button type="button" onClick={() => setSharedBrowserOpen(true)}><Music2 size={16} /> Add shared music</button><button type="button" onClick={openItemMusic}>Edit item music</button></div></div>}
@@ -576,7 +619,7 @@ function MusicArtwork({ music }: { music: MusicSelection }) {
     : <span className="music-artwork fallback"><Music2 size={18} /></span>;
 }
 
-function TrackBrowser({ tracks, query, loading, loadingMore, hasMore, selectedId, previewingId, onQueryChange, onLoadMore, onPreview, onSelect, onClose }: {
+function TrackBrowser({ tracks, query, loading, loadingMore, hasMore, selectedId, previewingId, fetchingTrackIds, onFetch, onQueryChange, onLoadMore, onPreview, onSelect, onClose }: {
   tracks: MusicDto[];
   query: string;
   loading: boolean;
@@ -584,6 +627,8 @@ function TrackBrowser({ tracks, query, loading, loadingMore, hasMore, selectedId
   hasMore: boolean;
   selectedId: string | null;
   previewingId: string | null;
+  fetchingTrackIds: Set<string>;
+  onFetch: (track: MusicDto) => void;
   onQueryChange: (value: string) => void;
   onLoadMore: () => void;
   onPreview: (track: MusicDto) => void;
@@ -601,11 +646,20 @@ function TrackBrowser({ tracks, query, loading, loadingMore, hasMore, selectedId
           id: track.id,
           title: track.displayName,
           artist: track.singleName || track.category || "Unknown artist",
-          url: track.songUrl,
+          url: track.songUrl ?? "",
           artwork: track.displayImages || "",
           duration: track.duration || 0
         };
-        return <article key={track.id} className={selected ? "selected" : ""}><MusicArtwork music={music} /><span><strong>{music.title}</strong><small>{music.artist} · {formatTime(music.duration)}</small></span><button type="button" onClick={() => onPreview(track)} aria-label={playing ? "Pause track preview" : "Play track preview"}>{playing ? <Pause size={16} /> : <Play size={16} />}</button><button type="button" className="track-select" onClick={() => onSelect(track)}>{selected ? <Check size={16} /> : "Select"}</button></article>;
+        const fetching = fetchingTrackIds.has(track.id);
+        const ready = track.fetched && Boolean(track.songUrl);
+        return <article key={track.id} className={selected ? "selected" : ""}>
+          <MusicArtwork music={music} />
+          <span><strong>{music.title}</strong><small>{music.artist} · {formatTime(music.duration)}</small></span>
+          {ready ? <>
+            <button type="button" onClick={() => onPreview(track)} aria-label={`${playing ? "Pause" : "Preview"} ${music.title}`}>{playing ? <Pause size={16} /> : <Play size={16} />}</button>
+            <button type="button" className="track-select" onClick={() => onSelect(track)} aria-label={`Select ${music.title}`}>{selected ? <Check size={16} /> : "Select"}</button>
+          </> : <button type="button" className="track-fetch" onClick={() => onFetch(track)} disabled={fetching} aria-label={`${fetching ? "Processing" : "Fetch"} ${music.title}`}>{fetching ? "Processing…" : "Fetch"}</button>}
+        </article>;
       })}{hasMore && <button type="button" className="track-load-more" onClick={onLoadMore} disabled={loadingMore}>{loadingMore ? "Loading more..." : "Load more"}</button>}</div>
         : <div className="track-empty"><Music2 size={20} /><strong>No tracks found</strong><span>Try another title or artist.</span></div>}
   </section>;
