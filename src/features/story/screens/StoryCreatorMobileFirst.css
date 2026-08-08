@@ -93,6 +93,10 @@
   .story-tool-heading { display: none; }
   .story-studio-tools input,
   .story-music-browser > input { font-size: 16px; }
+  .story-music-result,
+  .story-music-fetch { min-width: 0; max-width: 100%; }
+  .story-music-fetch { min-height: 48px; }
+  .story-music-fetch > span { overflow: hidden; }
   .story-studio-footer { padding-bottom: env(safe-area-inset-bottom); }
 }
 

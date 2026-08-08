@@ -854,3 +854,21 @@
   .story-studio-backdrop,
   .story-studio .spin { animation: none; }
 }
+.story-music-fetch {
+  grid-column: 1 / -1;
+  width: 100%;
+  min-width: 0;
+  min-height: 50px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 10px;
+  border-radius: 5px;
+  text-align: left;
+}
+.story-music-fetch > span { min-width: 0; display: grid; }
+.story-music-fetch strong,
+.story-music-fetch small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.story-music-fetch b { flex: 0 0 auto; font-size: 0.72rem; }
+.story-music-fetch:disabled { color: #777772; cursor: wait; background: #f1f1ee; }

@@ -21,19 +21,16 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import "./StoryCreatorStudio.css";
 import "./StoryCreatorMobileFirst.css";
 import { apiGet, apiSend, uploadCloudinaryMedia } from "../../../shared/api";
-import { MusicSegmentEditor, useMusicSegmentPreview } from "../../../shared/music";
+import {
+  MUSIC_FETCH_RESULT_EVENT,
+  MusicSegmentEditor,
+  requestMusicFetch,
+  type MusicDto,
+  type MusicFetchResult,
+  useMusicSegmentPreview,
+} from "../../../shared/music";
 import { useBodyScrollLock } from "../../../shared/overlays/useBodyScrollLock";
 import { createStoryPublicationId, storyPublicationFields } from "./storyPublication";
-
-type MusicDto = {
-  id: string;
-  displayName: string;
-  singleName?: string | null;
-  category?: string | null;
-  duration?: number | null;
-  songUrl?: string | null;
-  displayImages?: string | null;
-};
 
 type Page<T> = { content: T[]; pageNumber?: number; totalPages?: number };
 type DraftStatus = "ready" | "uploading" | "publishing" | "published" | "failed";
@@ -136,6 +133,7 @@ async function composeImageStoryFile(draft: StoryDraft): Promise<File> {
   const [mode, setMode] = useState<"edit" | "review">("edit");
   const [musicQuery, setMusicQuery] = useState("");
   const [musicResults, setMusicResults] = useState<MusicDto[]>([]);
+  const [fetchingTrackIds, setFetchingTrackIds] = useState<Set<string>>(() => new Set());
   const [musicLoading, setMusicLoading] = useState(false);
   const [musicLoadingMore, setMusicLoadingMore] = useState(false);
   const [musicPage, setMusicPage] = useState(0);
@@ -155,6 +153,43 @@ async function composeImageStoryFile(draft: StoryDraft): Promise<File> {
     toggleSegment: toggleMusicSegment,
     stop: stopMusicPreview,
   } = useMusicSegmentPreview();
+
+  useEffect(() => {
+    const handleMusicFetchResult = (event: Event) => {
+      const detail = (event as CustomEvent<MusicFetchResult>).detail;
+      if (!detail || (detail.kind !== "success" && detail.kind !== "failure")) return;
+      const trackId = detail.kind === "success" ? detail.music.id : detail.trackId;
+      setFetchingTrackIds((current) => {
+        if (!current.has(trackId)) return current;
+        const next = new Set(current);
+        next.delete(trackId);
+        return next;
+      });
+      if (previewingId === trackId) stopMusicPreview();
+      if (detail.kind === "success") {
+        setMusicResults((current) => current.map((music) => music.id === trackId ? detail.music : music));
+      } else {
+        window.dispatchEvent(new CustomEvent("app-toast", { detail: detail.message }));
+      }
+    };
+    window.addEventListener(MUSIC_FETCH_RESULT_EVENT, handleMusicFetchResult);
+    return () => window.removeEventListener(MUSIC_FETCH_RESULT_EVENT, handleMusicFetchResult);
+  }, [previewingId, stopMusicPreview]);
+
+  async function fetchTrack(music: MusicDto) {
+    if (music.fetched || fetchingTrackIds.has(music.id)) return;
+    setFetchingTrackIds((current) => new Set(current).add(music.id));
+    try {
+      await requestMusicFetch(music.id);
+    } catch {
+      setFetchingTrackIds((current) => {
+        const next = new Set(current);
+        next.delete(music.id);
+        return next;
+      });
+      window.dispatchEvent(new CustomEvent("app-toast", { detail: "Không thể bắt đầu tải bài hát." }));
+    }
+  }
 
   const active = drafts.find((draft) => draft.id === activeId) ?? drafts[0] ?? null;
   const readyCount = drafts.filter((draft) => draft.status !== "published").length;
@@ -322,7 +357,7 @@ async function composeImageStoryFile(draft: StoryDraft): Promise<File> {
   }
 
   function selectMusic(music: MusicDto) {
-    if (!active) return;
+    if (!active || !music.fetched || !music.songUrl) return;
     stopMusicPreview();
     const duration = Math.max(1, Math.floor(music.duration ?? 30));
     patchDraft(active.id, {
@@ -599,29 +634,39 @@ async function composeImageStoryFile(draft: StoryDraft): Promise<File> {
               <input autoFocus value={musicQuery} onChange={(event) => setMusicQuery(event.target.value)} placeholder="Tìm kiếm bài hát..." />
               <div>{musicLoading ? <p>Đang tìm kiếm...</p> : musicResults.length ? musicResults.map((music) => (
                 <div className="story-music-result" key={music.id}>
-                  <button className="story-music-select" onClick={() => selectMusic(music)}>
-                    <span><strong>{music.displayName}</strong><small>{music.singleName || music.category || "Music"}</small></span>
-                    {active?.music?.id === music.id ? <Check size={17} /> : <Plus size={17} />}
-                  </button>
-                  <button
+                  {music.fetched && music.songUrl ? <>
+                    <button className="story-music-select" onClick={() => selectMusic(music)} aria-label={`Select ${music.displayName}`}>
+                      <span><strong>{music.displayName}</strong><small>{music.singleName || music.category || "Music"}</small></span>
+                      {active?.music?.id === music.id ? <Check size={17} /> : <Plus size={17} />}
+                    </button>
+                    <button
+                      type="button"
+                      className="story-music-preview"
+                      aria-label={`${previewingId === music.id ? "Dừng nghe thử" : "Nghe thử"} ${music.displayName}`}
+                      onClick={() => {
+                        const duration = Math.max(1, Math.floor(music.duration ?? 30));
+                        const start = active?.music?.id === music.id ? active.musicStart ?? 0 : 0;
+                        const end = active?.music?.id === music.id
+                          ? active.musicEnd ?? Math.min(30, duration)
+                          : Math.min(30, duration);
+                        void toggleMusicSegment(
+                          { id: music.id, url: music.songUrl },
+                          { start, end },
+                        );
+                      }}
+                    >
+                      {previewingId === music.id ? <Pause size={16} /> : <Play size={16} />}
+                    </button>
+                  </> : <button
                     type="button"
-                    className="story-music-preview"
-                    disabled={!music.songUrl}
-                    aria-label={`${previewingId === music.id ? "Dừng nghe thử" : "Nghe thử"} ${music.displayName}`}
-                    onClick={() => {
-                      const duration = Math.max(1, Math.floor(music.duration ?? 30));
-                      const start = active?.music?.id === music.id ? active.musicStart ?? 0 : 0;
-                      const end = active?.music?.id === music.id
-                        ? active.musicEnd ?? Math.min(30, duration)
-                        : Math.min(30, duration);
-                      void toggleMusicSegment(
-                        { id: music.id, url: music.songUrl },
-                        { start, end },
-                      );
-                    }}
+                    className="story-music-fetch"
+                    onClick={() => void fetchTrack(music)}
+                    disabled={fetchingTrackIds.has(music.id)}
+                    aria-label={`${fetchingTrackIds.has(music.id) ? "Processing" : "Fetch"} ${music.displayName}`}
                   >
-                    {previewingId === music.id ? <Pause size={16} /> : <Play size={16} />}
-                  </button>
+                    <span><strong>{music.displayName}</strong><small>{music.singleName || music.category || "Music"}</small></span>
+                    <b>{fetchingTrackIds.has(music.id) ? "Processing…" : "Fetch"}</b>
+                  </button>}
                 </div>
               )) : <p>Không tìm thấy bài hát.</p>}</div>
             {musicHasMore && <button className="story-music-load-more" onClick={() => void loadMoreMusic()} disabled={musicLoadingMore}>{musicLoadingMore ? "Loading more..." : "Load more tracks"}</button>}
