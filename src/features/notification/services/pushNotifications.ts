@@ -56,14 +56,14 @@ export function currentNotificationPermission(): NotificationPermission | "unsup
 
 async function registerPushDevice(userId: string) {
   const vapidKey = import.meta.env.VITE_FIREBASE_VAPID_KEY?.trim();
-  if (!vapidKey) {
-    throw new Error("Push notifications are not configured. Set VITE_FIREBASE_VAPID_KEY before starting the frontend.");
-  }
   const registration = await navigator.serviceWorker.register("/firebase-messaging-sw.js", { scope: "/" });
   await navigator.serviceWorker.ready;
   const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
   const messaging = getMessaging(app);
-  const deviceToken = await getToken(messaging, { serviceWorkerRegistration: registration, vapidKey });
+  const tokenOptions = vapidKey
+    ? { serviceWorkerRegistration: registration, vapidKey }
+    : { serviceWorkerRegistration: registration };
+  const deviceToken = await getToken(messaging, tokenOptions);
   if (!deviceToken) throw new Error("Firebase did not return a messaging token.");
   await apiSend("/notifications/push-tokens", "POST", { userId, deviceId: getDeviceId(), deviceToken });
   return deviceToken;

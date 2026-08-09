@@ -64,6 +64,22 @@ describe("syncGrantedPushRegistration", () => {
     });
   });
 
+  it("uses Firebase's default Web Push key when no custom VAPID key is configured", async () => {
+    vi.stubEnv("VITE_FIREBASE_VAPID_KEY", "");
+
+    await expect(syncGrantedPushRegistration("user-1")).resolves.toBe(true);
+
+    expect(firebaseMocks.getToken).toHaveBeenCalledWith(
+      { name: "messaging" },
+      { serviceWorkerRegistration: registration },
+    );
+    expect(firebaseMocks.apiSend).toHaveBeenCalledWith("/notifications/push-tokens", "POST", {
+      userId: "user-1",
+      deviceId: expect.any(String),
+      deviceToken: "device-token",
+    });
+  });
+
   it("does nothing and never prompts when permission has not been granted", async () => {
     vi.stubGlobal("Notification", { permission: "default", requestPermission });
 
