@@ -9,8 +9,10 @@ const archiveStory: StoryArchiveDto = {
   mediaType: "IMAGE",
   musicId: null,
   musicUrl: null,
+  musicName: null,
   musicStart: null,
   musicEnd: null,
+  durationSeconds: 5,
   publicationId: null,
   publicationOrder: null,
   publicationItemCount: null,
@@ -25,11 +27,30 @@ const trayStory: StoryTrayDto = {
   username: "bach",
   fullName: "Đậu Đức Bách",
   avatarUrl: "https://cdn/avatar.jpg",
-  musicName: null,
-  durationSeconds: 5,
 };
 
 describe("Story endpoint mappers", () => {
+  it("preserves hydrated music playback for notification and highlight stories", () => {
+    const item = archivedStoryToItem({
+      ...archiveStory,
+      musicId: "music-1",
+      musicUrl: "https://cdn/music.mp3",
+      musicName: "Story song",
+      musicStart: 12,
+      musicEnd: 42,
+      durationSeconds: 30,
+    });
+
+    expect(item).toMatchObject({
+      musicId: "music-1",
+      musicUrl: "https://cdn/music.mp3",
+      musicName: "Story song",
+      musicStart: 12,
+      musicEnd: 42,
+      durationSeconds: 30,
+    });
+  });
+
   it("maps the Home tray identity returned by the tray contract", () => {
     const item = storyTrayToItem(trayStory);
 

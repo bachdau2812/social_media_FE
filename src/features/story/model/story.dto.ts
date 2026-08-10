@@ -29,8 +29,10 @@ export type StoryArchiveDto = {
   mediaType: string | null;
   musicId: string | null;
   musicUrl: string | null;
+  musicName: string | null;
   musicStart: number | null;
   musicEnd: number | null;
+  durationSeconds: number | null;
   publicationId: string | null;
   publicationOrder: number | null;
   publicationItemCount: number | null;
