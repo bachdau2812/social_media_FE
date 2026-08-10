@@ -40,7 +40,7 @@ export function PostVideoPlayer({
       onLoadedMetadata={(event) => onLoadedMetadata?.(event.currentTarget)}
     />
     {playback.buffering && <span className="post-video-buffering" aria-label="Buffering video" />}
-    <button
+    {eligible && <button
       type="button"
       className="post-video-sound"
       aria-label={playback.muted ? "Unmute video" : "Mute video"}
@@ -52,6 +52,6 @@ export function PostVideoPlayer({
       }}
     >
       {playback.muted ? <VolumeX size={17} /> : <Volume2 size={17} />}
-    </button>
+    </button>}
   </span>;
 }

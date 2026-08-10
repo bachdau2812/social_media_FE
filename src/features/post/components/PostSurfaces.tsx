@@ -11,6 +11,7 @@ import { FEED_MUSIC_SUSPEND_EVENT, reportFeedMusicVisibility, subscribeFeedMusic
 import { formatRelativeTime } from "../../../shared/utils";
 import { useBodyScrollLock } from "../../../shared/overlays/useBodyScrollLock";
 import { PostDetailComposer, type CommentMediaSelection } from "./PostDetailComposer";
+import { PostVideoPlayer } from "./PostVideoPlayer";
 type Page<T> = { content: T[]; pageNumber: number; totalElements: number; totalPages: number };
 type PostDetails = PostDetailsDto;
 type CommentDto = { id: string; postId: string; userId: string; parentId?: string | null; content?: string | null; commentType?: string | null; mediaUrl?: string | null; timestamp?: string | null; replyCount?: number; hasLiked?: boolean; username?: string | null; fullName?: string | null; avatarUrl?: string | null };
@@ -76,35 +77,10 @@ export function PostCard({ post, index, viewerId, onOpen, onToggle, onEdit, onAr
   </article>;
 }
 
-function FeedVideo({ media, active }: { media: Post["media"][number]; active: boolean }) {
-  const videoRef = useRef<HTMLVideoElement | null>(null);
-  useEffect(() => {
-    const video = videoRef.current;
-    if (!video) return;
-    if (!active) {
-      video.pause();
-      return;
-    }
-    const observer = new IntersectionObserver(([entry]) => {
-      if (entry?.isIntersecting && entry.intersectionRatio >= 0.55 && document.visibilityState === "visible") {
-        void video.play().catch(() => undefined);
-      } else {
-        video.pause();
-      }
-    }, { threshold: [0, 0.55, 1] });
-    observer.observe(video);
-    return () => {
-      observer.disconnect();
-      video.pause();
-    };
-  }, [active, media.id, media.url]);
-  return <video ref={videoRef} src={media.url} muted playsInline loop preload="metadata" />;
-}
-
-function FeedMediaLayer({ media, className, interactive = false }: { media: Post["media"][number]; className: string; interactive?: boolean }) {
+function FeedMediaLayer({ media, className, interactive = false, playbackEligible = false }: { media: Post["media"][number]; className: string; interactive?: boolean; playbackEligible?: boolean }) {
   return <span className={className} aria-hidden={interactive ? undefined : true}>
     {media.type === "VIDEO"
-      ? <FeedVideo media={media} active={interactive} />
+      ? <PostVideoPlayer source={media.url} eligible={interactive && playbackEligible} preload={interactive ? "auto" : "metadata"} />
       : <img src={media.url} alt={interactive ? media.alt : ""} draggable={false} />}
   </span>;
 }function PostMediaCarousel({ post, onOpen }: { post: Post; onOpen: () => void }) {
@@ -236,10 +212,10 @@ function FeedMediaLayer({ media, className, interactive = false }: { media: Post
 
   if (!post.media.length) return <button className="media-button text-media" onClick={onOpen}><div className="text-post" title={post.caption || "No caption"}>{post.caption || "No caption"}</div></button>;
   return <div ref={frameRef} className="post-media-frame" style={{ aspectRatio: frameAspectRatio }} tabIndex={0} onKeyDown={(event) => { if (event.key === "ArrowLeft") move(-1); if (event.key === "ArrowRight") move(1); }}>
-    <button className="media-surface feed-media-stage" onClick={onOpen}>
+    <div className="media-surface feed-media-stage" role="button" tabIndex={0} onClick={onOpen} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") onOpen(); }}>
       {previousMedia && <FeedMediaLayer media={previousMedia} className={"feed-media-content exiting slide-" + transitionDirection} />}
-      <FeedMediaLayer key={activeMedia.id} media={activeMedia} className={previousMedia ? "feed-media-content entering slide-" + transitionDirection : "feed-media-content"} interactive />
-    </button>
+      <FeedMediaLayer key={activeMedia.id} media={activeMedia} className={previousMedia ? "feed-media-content entering slide-" + transitionDirection : "feed-media-content"} interactive playbackEligible={playbackActive && !feedSuspended} />
+    </div>
 
     {activeMedia.caption && <div key={`feed-caption-${activeMedia.id}`} className={`item-caption-thought feed-item-caption ${activeMedia.caption.length > 180 ? "long" : ""}`} tabIndex={0} role="button" aria-label={`View media caption: ${activeMedia.caption}`}><MessageCircle className="caption-trigger-icon" size={18} aria-hidden="true" /><p>{activeMedia.caption}</p></div>}
     {canPlayMusic && <button type="button" className="feed-music-mute" onClick={toggleMusicMuted} aria-label={musicMuted ? "Unmute music" : "Mute music"} aria-pressed={musicMuted}>{musicMuted ? <VolumeX size={15} /> : <Volume2 size={15} />}</button>}
@@ -773,7 +749,7 @@ function DetailMediaLayer({ media, className, active = false }: { media: Post["m
   const mediaStyle = fitSize ? { width: `${fitSize.width}px`, height: `${fitSize.height}px` } : undefined;
   return <div ref={contentRef} className={className + " " + orientation} aria-hidden={active ? undefined : true}>
     {media.type === "VIDEO"
-      ? <video src={media.url} muted={!active} controls={active} playsInline preload="metadata" style={mediaStyle} onLoadedMetadata={(event) => setNaturalSize(event.currentTarget.videoWidth, event.currentTarget.videoHeight)} />
+      ? <PostVideoPlayer source={media.url} eligible={active} controls={active} preload={active ? "auto" : "metadata"} style={mediaStyle} onLoadedMetadata={(video) => setNaturalSize(video.videoWidth, video.videoHeight)} />
       : <img src={media.url} alt={active ? media.alt : ""} draggable={false} style={mediaStyle} onLoad={(event) => setNaturalSize(event.currentTarget.naturalWidth, event.currentTarget.naturalHeight)} />}
   </div>;
 }

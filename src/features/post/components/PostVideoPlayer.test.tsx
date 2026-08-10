@@ -14,7 +14,7 @@ describe("PostVideoPlayer", () => {
     const { container } = render(
       <PostVideoPlayer
         source="https://cdn.example.test/video.mp4"
-        eligible={false}
+        eligible
         preload="auto"
         controls
       />,
