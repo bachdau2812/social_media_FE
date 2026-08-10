@@ -53,11 +53,7 @@ beforeEach(() => {
   vi.stubGlobal("IntersectionObserver", TestIntersectionObserver);
   vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue(undefined);
   vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => undefined);
-  vi.spyOn(HTMLMediaElement.prototype, "load").mockImplementation(function (this: HTMLMediaElement) {
-    if (this.getAttribute("src")) {
-      queueMicrotask(() => this.onloadeddata?.(new Event("loadeddata") as never));
-    }
-  });
+  vi.spyOn(HTMLMediaElement.prototype, "load").mockImplementation(() => undefined);
   vi.mocked(apiGet).mockRejectedValue(new Error("offline fixture"));
 });
 

@@ -11,6 +11,7 @@ import { FEED_MUSIC_SUSPEND_EVENT, reportFeedMusicVisibility, subscribeFeedMusic
 import { formatRelativeTime } from "../../../shared/utils";
 import { useBodyScrollLock } from "../../../shared/overlays/useBodyScrollLock";
 import { PostDetailComposer, type CommentMediaSelection } from "./PostDetailComposer";
+import { AdjacentPostMediaPreloads } from "./AdjacentPostMediaPreloads";
 import { PostVideoPlayer } from "./PostVideoPlayer";
 type Page<T> = { content: T[]; pageNumber: number; totalElements: number; totalPages: number };
 type PostDetails = PostDetailsDto;
@@ -108,10 +109,6 @@ function FeedMediaLayer({ media, className, interactive = false, playbackEligibl
   const frameAspectRatio = postMediaRatioValue(post.mediaRatio);
 
   useEffect(() => {
-    void Promise.all(post.media.map(preloadPostMedia));
-  }, [post.id]);
-
-  useEffect(() => {
     const handleSuspend = (event: Event) => setFeedSuspended((event as CustomEvent<boolean>).detail);
     window.addEventListener(FEED_MUSIC_SUSPEND_EVENT, handleSuspend);
     return () => window.removeEventListener(FEED_MUSIC_SUSPEND_EVENT, handleSuspend);
@@ -193,16 +190,14 @@ function FeedMediaLayer({ media, className, interactive = false, playbackEligibl
     const nextIndex = Math.min(post.media.length - 1, Math.max(0, activeIndex + delta));
     if (nextIndex === activeIndex) return;
     transitioningRef.current = true;
-    void preloadPostMedia(post.media[nextIndex]).then(() => {
-      setTransitionDirection(delta > 0 ? "next" : "previous");
-      setPreviousMediaIndex(activeIndex);
-      setActiveIndex(nextIndex);
-      if (transitionTimerRef.current !== null) window.clearTimeout(transitionTimerRef.current);
-      transitionTimerRef.current = window.setTimeout(() => {
-        setPreviousMediaIndex(null);
-        transitioningRef.current = false;
-      }, 320);
-    });
+    setTransitionDirection(delta > 0 ? "next" : "previous");
+    setPreviousMediaIndex(activeIndex);
+    setActiveIndex(nextIndex);
+    if (transitionTimerRef.current !== null) window.clearTimeout(transitionTimerRef.current);
+    transitionTimerRef.current = window.setTimeout(() => {
+      setPreviousMediaIndex(null);
+      transitioningRef.current = false;
+    }, 320);
   }
 
   function toggleMusicMuted() {
@@ -221,6 +216,7 @@ function FeedMediaLayer({ media, className, interactive = false, playbackEligibl
     {canPlayMusic && <button type="button" className="feed-music-mute" onClick={toggleMusicMuted} aria-label={musicMuted ? "Unmute music" : "Mute music"} aria-pressed={musicMuted}>{musicMuted ? <VolumeX size={15} /> : <Volume2 size={15} />}</button>}
     {hasMany && <><button className="carousel-control previous" onClick={() => move(-1)} disabled={activeIndex === 0 || previousMediaIndex !== null} aria-label="Previous media"><ChevronLeft size={19} /></button><button className="carousel-control next" onClick={() => move(1)} disabled={activeIndex === post.media.length - 1 || previousMediaIndex !== null} aria-label="Next media"><ChevronRight size={19} /></button><span className="media-counter">{String(activeIndex + 1).padStart(2, "0")} / {String(post.media.length).padStart(2, "0")}</span><span className="media-progress"><i style={{ width: `${((activeIndex + 1) / post.media.length) * 100}%` }} /></span></>}
     <audio ref={audioRef} preload="metadata" muted={musicMuted} />
+    <AdjacentPostMediaPreloads media={post.media} activeIndex={activeIndex} />
   </div>;
 }function ActionBar({ post, onToggle, onComment, onOpenEngagement, showCounts = true }: { post: Post; onToggle: (postId: string, key: "liked" | "saved" | "reposted") => void; onComment?: () => void; onOpenEngagement?: (kind: "LIKES" | "REPOSTS") => void; showCounts?: boolean }) {
   return <div className="action-bar">
@@ -304,16 +300,14 @@ export function PostDetail({ post, viewerId, targetCommentId, onClose, onToggleP
     const nextIndex = Math.min(detailPost.media.length - 1, Math.max(0, activeMediaIndex + delta));
     if (nextIndex === activeMediaIndex) return;
     mediaTransitioningRef.current = true;
-    void preloadPostMedia(detailPost.media[nextIndex]).then(() => {
-      setMediaTransition(delta > 0 ? "next" : "previous");
-      setPreviousMediaIndex(activeMediaIndex);
-      setActiveMediaIndex(nextIndex);
-      if (mediaTransitionTimerRef.current !== null) window.clearTimeout(mediaTransitionTimerRef.current);
-      mediaTransitionTimerRef.current = window.setTimeout(() => {
-        setPreviousMediaIndex(null);
-        mediaTransitioningRef.current = false;
-      }, 320);
-    });
+    setMediaTransition(delta > 0 ? "next" : "previous");
+    setPreviousMediaIndex(activeMediaIndex);
+    setActiveMediaIndex(nextIndex);
+    if (mediaTransitionTimerRef.current !== null) window.clearTimeout(mediaTransitionTimerRef.current);
+    mediaTransitionTimerRef.current = window.setTimeout(() => {
+      setPreviousMediaIndex(null);
+      mediaTransitioningRef.current = false;
+    }, 320);
   }
 
   useEffect(() => {
@@ -324,9 +318,8 @@ export function PostDetail({ post, viewerId, targetCommentId, onClose, onToggleP
     mediaTransitioningRef.current = false;
     setDetailMediaReady(false);
     apiGet<PostDetails>("/posts/" + encodeURIComponent(post.id) + "?mediaType=POST")
-      .then(async (detail) => {
+      .then((detail) => {
         const hydrated = mergePostDetail(post, detail);
-        await Promise.all(hydrated.media.map(preloadPostMedia));
         if (active) {
           setDetailPost(hydrated);
           setDetailMediaReady(true);
@@ -690,30 +683,6 @@ function formatMusicTime(seconds?: number | null) {
   const safe = Math.max(0, Math.floor(seconds ?? 0));
   return String(Math.floor(safe / 60)).padStart(2, "0") + ":" + String(safe % 60).padStart(2, "0");
 }
-function preloadPostMedia(media?: Post["media"][number]) {
-  if (!media?.url) return Promise.resolve();
-  if (media.type === "VIDEO") {
-    return new Promise<void>((resolve) => {
-      const video = document.createElement("video");
-      const finish = () => {
-        video.removeAttribute("src");
-        video.load();
-        resolve();
-      };
-      video.preload = "metadata";
-      video.onloadeddata = finish;
-      video.onerror = finish;
-      video.src = media.url;
-      video.load();
-    });
-  }
-  return new Promise<void>((resolve) => {
-    const image = new Image();
-    image.onload = () => resolve();
-    image.onerror = () => resolve();
-    image.src = media.url;
-  });
-}
 function DetailMediaLayer({ media, className, active = false }: { media: Post["media"][number]; className: string; active?: boolean }) {
   const contentRef = useRef<HTMLDivElement | null>(null);
   const naturalSizeRef = useRef<{ width: number; height: number } | null>(null);
@@ -769,6 +738,7 @@ function DetailMediaViewer({ loading, post, activeIndex, previousIndex, transiti
       {canPlayMusic && <button type="button" className="detail-music-mute" onClick={onToggleMusicMuted} aria-label={musicMuted ? "Unmute music" : "Mute music"} aria-pressed={musicMuted}>{musicMuted ? <VolumeX size={20} /> : <Volume2 size={20} />}</button>}
       {canPlayMusic && <div className="detail-music-attribution"><span><strong>{music?.displayName}</strong>{music?.artist && <small>{music.artist}</small>}</span></div>}
       {hasMany && <><button className="carousel-control previous" onClick={() => onMove(-1)} disabled={activeIndex === 0 || previousIndex !== null} aria-label="Previous media"><ChevronLeft size={20} /></button><button className="carousel-control next" onClick={() => onMove(1)} disabled={activeIndex === post.media.length - 1 || previousIndex !== null} aria-label="Next media"><ChevronRight size={20} /></button><span className="media-counter">{String(activeIndex + 1).padStart(2, "0")} / {String(post.media.length).padStart(2, "0")}</span><span className="media-progress"><i style={{ width: (((activeIndex + 1) / post.media.length) * 100) + "%" }} /></span></>}
+      <AdjacentPostMediaPreloads media={post.media} activeIndex={activeIndex} />
     </div>
   );
 }function activeMediaSupportsMusic(media: Post["media"][number]) { return media.type !== "VIDEO"; }
