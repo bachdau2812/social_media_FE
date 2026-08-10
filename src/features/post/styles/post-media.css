@@ -3975,6 +3975,11 @@ span.detail-media-thumbnail {
   min-height: 0;
 }
 
+.detail-media-content .post-video-player {
+  display: grid;
+  place-items: center;
+}
+
 .post-video-player > video {
   display: block;
   width: 100%;

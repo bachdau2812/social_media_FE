@@ -1,9 +1,16 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { apiGet, apiSend, uploadCloudinaryMedia } from "../../../shared/api";
 import type { Post } from "../model/post.types";
 import { reportFeedMusicVisibility } from "../model/feedMusicCoordinator";
 import { CommentRow, PostCard, PostDetail } from "./PostSurfaces";
+
+const postMediaCss = readFileSync(
+  resolve(process.cwd(), "src/features/post/styles/post-media.css"),
+  "utf8",
+);
 
 vi.mock("../../../shared/api", () => ({
   apiGet: vi.fn(),
@@ -64,6 +71,12 @@ afterEach(() => {
 });
 
 describe("Post video playback", () => {
+  it("centers a fitted detail video inside its full-size player wrapper", () => {
+    expect(postMediaCss).toMatch(
+      /\.detail-media-content \.post-video-player\s*\{[^}]*display:\s*grid;[^}]*place-items:\s*center;/s,
+    );
+  });
+
   it("autoplays the visible Feed video with original audio", async () => {
     const { container } = render(<PostCard
       post={videoPost()}
