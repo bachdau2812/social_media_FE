@@ -1,6 +1,7 @@
 import { Archive, Check, ChevronLeft, ChevronRight, ImagePlus, Info, Music2, Pause, Play, Send, X } from "lucide-react";
 import { ChangeEvent, DragEvent, useEffect, useRef, useState } from "react";
 import { apiGet, apiSend, uploadCloudinaryMedia } from "../../../shared/api";
+import { validateMediaFile } from "../../../shared/media";
 import {
   MUSIC_FETCH_RESULT_EVENT,
   MusicSegmentEditor,
@@ -34,9 +35,6 @@ type MediaItem = {
   musicStart: number;
   musicEnd: number;
 };
-
-const IMAGE_MAX_BYTES = 50 * 1024 * 1024;
-const VIDEO_MAX_BYTES = 500 * 1024 * 1024;
 
 type Props = {
   userId: string;
@@ -242,9 +240,11 @@ export function PostCreationStudio({ userId, onBack, onClose, onDraftSaved, onPu
       setStatus("failure");
       return;
     }
-    const tooLarge = selected.find((file) => file.type.startsWith("image/") ? file.size > IMAGE_MAX_BYTES : file.size > VIDEO_MAX_BYTES);
-    if (tooLarge) {
-      setFileError(tooLarge.type.startsWith("image/") ? "Images must be 50MB or smaller." : "Videos must be 500MB or smaller.");
+    const sizeError = selected
+      .map((file) => validateMediaFile(file, file.type.startsWith("video/") ? "VIDEO" : "IMAGE"))
+      .find((error): error is string => Boolean(error));
+    if (sizeError) {
+      setFileError(sizeError);
       setStatus("failure");
       return;
     }

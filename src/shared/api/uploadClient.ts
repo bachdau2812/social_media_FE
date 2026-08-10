@@ -1,4 +1,5 @@
 import { apiGet } from "./apiClient";
+import { getMediaUploadPolicy, validateMediaFile, type MediaUploadKind } from "../media/mediaUploadPolicy";
 
 export type MediaSignatureResponse = {
   signature: string;
@@ -23,6 +24,13 @@ export type CloudinaryUploadResult = {
 };
 
 export async function uploadCloudinaryMedia(file: File): Promise<CloudinaryUploadResult> {
+  const mediaKind: MediaUploadKind = file.type.startsWith("video/")
+    ? "VIDEO"
+    : file.type.startsWith("audio/") ? "AUDIO" : "IMAGE";
+  const policy = await getMediaUploadPolicy();
+  const validationError = validateMediaFile(file, mediaKind, policy);
+  if (validationError) throw new Error(validationError);
+
   const signature = await apiGet<MediaSignatureResponse>("/media/signature");
   const cloudName = signature.cloudName || import.meta.env.VITE_CLOUDINARY_CLOUD_NAME || "dpilnbfrs";
   const form = new FormData();

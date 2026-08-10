@@ -3,6 +3,7 @@ import { type ChangeEvent, type FormEvent, type MouseEvent, useEffect, useLayout
 import { createPortal } from "react-dom";
 import { apiGet, apiSend, uploadCloudinaryMedia } from "../../../shared/api";
 import { Avatar as SharedAvatar } from "../../../shared/components";
+import { validateMediaFile } from "../../../shared/media";
 import type { Post } from "../model/post.types";
 import type { PostDetailsDto } from "../model/post.dto";
 import { mergePostDetail } from "../model/post.mapper";
@@ -22,9 +23,6 @@ type LikeToggleResponse = { targetId: string; targetType: string; liked: boolean
 type CommentNode = CommentDto & { replies: CommentNode[] };
 type EngagementProfileDto = { user: { userId: string; username?: string | null; fullName?: string | null }; currentAvatar?: { secureUrl?: string | null; url?: string | null } | null };
 type EngagementPerson = { id: string; username: string; displayName: string; avatarUrl: string };
-
-const COMMENT_IMAGE_MAX_BYTES = 50 * 1024 * 1024;
-const COMMENT_VIDEO_MAX_BYTES = 500 * 1024 * 1024;
 
 function Avatar({ src, label }: { src?: string; label: string }) { return <SharedAvatar src={src} name={label} alt={label} />; }
 function MusicIcon() { return <Volume2 size={18} />; }
@@ -544,9 +542,9 @@ export function PostDetail({ post, viewerId, targetCommentId, onClose, onToggleP
       setSubmitError("Comments only support one image or video.");
       return;
     }
-    const limit = isVideo ? COMMENT_VIDEO_MAX_BYTES : COMMENT_IMAGE_MAX_BYTES;
-    if (file.size > limit) {
-      setSubmitError(isVideo ? "Video size must not exceed 500 MB." : "Image size must not exceed 50 MB.");
+    const sizeError = validateMediaFile(file, isVideo ? "VIDEO" : "IMAGE");
+    if (sizeError) {
+      setSubmitError(sizeError);
       return;
     }
     setSubmitError("");
@@ -567,7 +565,11 @@ export function PostDetail({ post, viewerId, targetCommentId, onClose, onToggleP
         userId: viewerId,
         parentId: replyTarget?.id ?? null,
         content: content || "",
-        mediaList: uploaded ? [{ secureUrl: uploaded.secureUrl, publicId: uploaded.publicId }] : [],
+        mediaList: uploaded ? [{
+          secureUrl: uploaded.secureUrl,
+          publicId: uploaded.publicId,
+          resourceType: uploaded.resourceType || selectedMedia?.type.toLowerCase(),
+        }] : [],
       });
       if (selectedMedia) {
         pendingMediaCommentIds.current.add(response.commentId);

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
+import { validateMediaFile } from "../../../shared/media";
 
-export const CHAT_MEDIA_MAX_BYTES = 50 * 1024 * 1024;
 export const CHAT_VOICE_MAX_DURATION_MS = 5 * 60 * 1000;
 export const CHAT_IMAGE_MAX_COUNT = 10;
 
@@ -89,8 +89,9 @@ export function useChatMediaComposer() {
         validationError = "Chỉ hỗ trợ tệp ảnh.";
         return;
       }
-      if (file.size > CHAT_MEDIA_MAX_BYTES) {
-        validationError = "Mỗi ảnh không được vượt quá 50 MB.";
+      const sizeError = validateMediaFile(file, "IMAGE");
+      if (sizeError) {
+        validationError = sizeError;
         return;
       }
       const previewUrl = URL.createObjectURL(file);
@@ -174,8 +175,9 @@ export function useChatMediaComposer() {
         setRecording(false);
         if (cancelled || chunks.length === 0) return;
         const blob = new Blob(chunks, { type: mimeType });
-        if (blob.size > CHAT_MEDIA_MAX_BYTES) {
-          setError("Tin nhắn thoại không được vượt quá 50 MB.");
+        const sizeError = validateMediaFile(blob, "AUDIO");
+        if (sizeError) {
+          setError(sizeError);
           return;
         }
         const extension = mimeType.includes("mp4") ? "m4a" : "webm";

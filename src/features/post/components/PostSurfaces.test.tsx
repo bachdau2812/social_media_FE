@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { apiGet } from "../../../shared/api";
+import { apiGet, apiSend, uploadCloudinaryMedia } from "../../../shared/api";
 import type { Post } from "../model/post.types";
 import { reportFeedMusicVisibility } from "../model/feedMusicCoordinator";
 import { CommentRow, PostCard, PostDetail } from "./PostSurfaces";
@@ -106,6 +106,41 @@ describe("Post video playback", () => {
 
     await waitFor(() => expect(screen.getByText("02 / 02")).toBeInTheDocument());
     await waitFor(() => expect(vi.mocked(HTMLMediaElement.prototype.play).mock.calls.length).toBeGreaterThan(firstPlayCount));
+  });
+});
+
+describe("Post comment media policy", () => {
+  it("sends the uploaded video resource type to moderation", async () => {
+    vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:comment-video");
+    vi.mocked(uploadCloudinaryMedia).mockResolvedValue({
+      secureUrl: "https://cdn.example.test/comment.mp4",
+      publicId: "comment-video",
+      resourceType: "video",
+      bytes: 1024,
+      fileName: "comment.mp4",
+      mimeType: "video/mp4",
+    });
+    vi.mocked(apiSend).mockResolvedValue({ commentId: "comment-1" });
+    const { container } = render(<PostDetail
+      post={videoPost()}
+      viewerId="viewer-1"
+      onClose={vi.fn()}
+      onTogglePost={vi.fn()}
+      onCommentCreated={vi.fn()}
+      onEdit={vi.fn()}
+      onArchive={vi.fn()}
+      onOpenProfile={vi.fn(async () => undefined)}
+    />);
+    const file = new File(["video"], "comment.mp4", { type: "video/mp4" });
+
+    fireEvent.change(container.querySelector(".comment-file-input") as HTMLInputElement, {
+      target: { files: [file] },
+    });
+    fireEvent.click(container.querySelector(".detail-composer button[type=submit]") as HTMLButtonElement);
+
+    await waitFor(() => expect(apiSend).toHaveBeenCalledWith("/comments", "POST", expect.objectContaining({
+      mediaList: [expect.objectContaining({ resourceType: "video" })],
+    })));
   });
 });
 

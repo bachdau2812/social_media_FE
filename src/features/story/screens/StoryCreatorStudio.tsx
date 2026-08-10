@@ -21,6 +21,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import "./StoryCreatorStudio.css";
 import "./StoryCreatorMobileFirst.css";
 import { apiGet, apiSend, uploadCloudinaryMedia } from "../../../shared/api";
+import { validateMediaFile } from "../../../shared/media";
 import {
   MUSIC_FETCH_RESULT_EVENT,
   MusicSegmentEditor,
@@ -65,9 +66,6 @@ type StoryCreatorStudioProps = {
   initialDraft?: { id: string; draftType: string; payload?: string | null } | null;
 };
 
-const IMAGE_MAX_BYTES = 50 * 1024 * 1024;
-const VIDEO_MAX_BYTES = 500 * 1024 * 1024;
-
 function createDraft(file: File, index: number): StoryDraft {
   return {
     id: `story-${Date.now()}-${index}-${crypto.randomUUID()}`,
@@ -89,9 +87,7 @@ function validateFile(file: File) {
   const image = file.type.startsWith("image/");
   const video = file.type.startsWith("video/");
   if (!image && !video) return "Chỉ hỗ trợ tệp ảnh hoặc video.";
-  if (image && file.size > IMAGE_MAX_BYTES) return "Ảnh không được vượt quá 50 MB.";
-  if (video && file.size > VIDEO_MAX_BYTES) return "Video không được vượt quá 500 MB.";
-  return null;
+  return validateMediaFile(file, video ? "VIDEO" : "IMAGE");
 }
 
 function formatSeconds(value: number | null) {
