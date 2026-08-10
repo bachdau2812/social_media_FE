@@ -24,6 +24,7 @@ import { apiGet, apiSend, uploadCloudinaryMedia } from "../../../shared/api";
 import {
   MUSIC_FETCH_RESULT_EVENT,
   MusicSegmentEditor,
+  MusicTrackBrowser,
   requestMusicFetch,
   type MusicDto,
   type MusicFetchResult,
@@ -630,46 +631,30 @@ async function composeImageStoryFile(draft: StoryDraft): Promise<File> {
         {musicOpen && (
           <div className="story-music-overlay" role="dialog" aria-modal="true" aria-label="Chọn nhạc">
             <div className="story-music-browser">
-              <header><div><strong>Chọn nhạc</strong><span>Áp dụng riêng cho Story đang chọn.</span></div><button onClick={closeMusicBrowser} aria-label="Đóng danh sách nhạc"><X size={19} /></button></header>
-              <input autoFocus value={musicQuery} onChange={(event) => setMusicQuery(event.target.value)} placeholder="Tìm kiếm bài hát..." />
-              <div>{musicLoading ? <p>Đang tìm kiếm...</p> : musicResults.length ? musicResults.map((music) => (
-                <div className="story-music-result" key={music.id}>
-                  {music.fetched && music.songUrl ? <>
-                    <button className="story-music-select" onClick={() => selectMusic(music)} aria-label={`Select ${music.displayName}`}>
-                      <span><strong>{music.displayName}</strong><small>{music.singleName || music.category || "Music"}</small></span>
-                      {active?.music?.id === music.id ? <Check size={17} /> : <Plus size={17} />}
-                    </button>
-                    <button
-                      type="button"
-                      className="story-music-preview"
-                      aria-label={`${previewingId === music.id ? "Dừng nghe thử" : "Nghe thử"} ${music.displayName}`}
-                      onClick={() => {
-                        const duration = Math.max(1, Math.floor(music.duration ?? 30));
-                        const start = active?.music?.id === music.id ? active.musicStart ?? 0 : 0;
-                        const end = active?.music?.id === music.id
-                          ? active.musicEnd ?? Math.min(30, duration)
-                          : Math.min(30, duration);
-                        void toggleMusicSegment(
-                          { id: music.id, url: music.songUrl },
-                          { start, end },
-                        );
-                      }}
-                    >
-                      {previewingId === music.id ? <Pause size={16} /> : <Play size={16} />}
-                    </button>
-                  </> : <button
-                    type="button"
-                    className="story-music-fetch"
-                    onClick={() => void fetchTrack(music)}
-                    disabled={fetchingTrackIds.has(music.id)}
-                    aria-label={`${fetchingTrackIds.has(music.id) ? "Processing" : "Fetch"} ${music.displayName}`}
-                  >
-                    <span><strong>{music.displayName}</strong><small>{music.singleName || music.category || "Music"}</small></span>
-                    <b>{fetchingTrackIds.has(music.id) ? "Processing…" : "Fetch"}</b>
-                  </button>}
-                </div>
-              )) : <p>Không tìm thấy bài hát.</p>}</div>
-            {musicHasMore && <button className="story-music-load-more" onClick={() => void loadMoreMusic()} disabled={musicLoadingMore}>{musicLoadingMore ? "Loading more..." : "Load more tracks"}</button>}
+              <MusicTrackBrowser
+                tracks={musicResults}
+                query={musicQuery}
+                loading={musicLoading}
+                loadingMore={musicLoadingMore}
+                hasMore={musicHasMore}
+                selectedId={active?.music?.id ?? null}
+                previewingId={previewingId}
+                fetchingTrackIds={fetchingTrackIds}
+                onFetch={(music) => void fetchTrack(music)}
+                onQueryChange={setMusicQuery}
+                onLoadMore={() => void loadMoreMusic()}
+                onPreview={(music) => {
+                  if (!music.songUrl) return;
+                  const duration = Math.max(1, Math.floor(music.duration ?? 30));
+                  const start = active?.music?.id === music.id ? active.musicStart ?? 0 : 0;
+                  const end = active?.music?.id === music.id
+                    ? active.musicEnd ?? Math.min(30, duration)
+                    : Math.min(30, duration);
+                  void toggleMusicSegment({ id: music.id, url: music.songUrl }, { start, end });
+                }}
+                onSelect={selectMusic}
+                onClose={closeMusicBrowser}
+              />
             </div>
           </div>
         )}

@@ -719,6 +719,25 @@
 .story-music-preview:hover:not(:disabled) { background: #e7e7e2; }
 .story-music-preview:disabled { opacity: 0.35; cursor: not-allowed; }
 
+.story-music-browser {
+  display: block;
+}
+
+.story-music-browser > .track-browser {
+  overflow: visible;
+  padding: 16px;
+}
+
+.story-music-browser .track-browser > header {
+  padding: 0;
+  border-bottom: 0;
+}
+
+.story-music-browser .track-browser > header button {
+  width: 32px;
+  border-radius: 5px;
+}
+
 .story-close-prompt > div {
   width: min(360px, 100%);
   display: grid;

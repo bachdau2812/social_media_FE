@@ -122,7 +122,7 @@ describe("StoryCreatorStudio", () => {
     await waitFor(() => expect(screen.getByAltText("story.jpg")).toBeInTheDocument());
     fireEvent.click(container.querySelector(".story-add-music") as HTMLElement);
     await waitFor(() => expect(screen.getByText("Demo track")).toBeInTheDocument());
-    fireEvent.click(screen.getByText("Demo track").closest("button") as HTMLElement);
+    fireEvent.click(screen.getByRole("button", { name: "Select Demo track" }));
 
     const editor = within(container);
     const start = await editor.findByRole("slider", { name: "Music segment start" });

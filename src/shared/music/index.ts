@@ -1,4 +1,5 @@
 export { MusicSegmentEditor, type MusicSegmentEditorProps } from "./MusicSegmentEditor";
+export { MusicTrackBrowser, type MusicTrackBrowserProps } from "./MusicTrackBrowser";
 export {
   DEFAULT_SEGMENT_SECONDS,
   MAX_SEGMENT_SECONDS,

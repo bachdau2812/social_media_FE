@@ -1,9 +1,10 @@
-import { Archive, Check, ChevronLeft, ChevronRight, ImagePlus, Info, Music2, Pause, Play, Search, Send, X } from "lucide-react";
+import { Archive, Check, ChevronLeft, ChevronRight, ImagePlus, Info, Music2, Pause, Play, Send, X } from "lucide-react";
 import { ChangeEvent, DragEvent, useEffect, useRef, useState } from "react";
 import { apiGet, apiSend, uploadCloudinaryMedia } from "../../../shared/api";
 import {
   MUSIC_FETCH_RESULT_EVENT,
   MusicSegmentEditor,
+  MusicTrackBrowser,
   normalizeMusicSegment,
   requestMusicFetch,
   type MusicDto,
@@ -550,7 +551,7 @@ export function PostCreationStudio({ userId, onBack, onClose, onDraftSaved, onPu
                     {!sharedMusic && item.type === "IMAGE" && <div className="accordion-music-editor">
                       {item.music && itemBrowserId !== item.id
                         ? <SelectedTrackEditor music={item.music} start={item.musicStart} end={item.musicEnd} playing={previewingId === item.music.id} onRangeChange={(startValue, endValue) => patchItem(item.id, { musicStart: startValue, musicEnd: endValue })} onPlayToggle={() => togglePreview(item.music!, item.musicStart, item.musicEnd)} onRangeCommit={(startValue, endValue) => togglePreview(item.music!, startValue, endValue, true)} onInteractionStart={stopPreview} onReplace={() => setItemBrowserId(item.id)} onRemove={() => removeItemMusic(item.id)} />
-                        : <TrackBrowser tracks={tracks} query={musicQuery} loading={musicLoading} loadingMore={musicLoadingMore} hasMore={musicHasMore} selectedId={item.music?.id ?? null} previewingId={previewingId} fetchingTrackIds={fetchingTrackIds} onFetch={(track) => void fetchTrack(track)} onQueryChange={setMusicQuery} onLoadMore={() => void loadMoreTracks()} onPreview={(track) => togglePreview(toMusic(track))} onSelect={(track) => selectItemMusic(item.id, track)} onClose={() => { if (item.music) setItemBrowserId(null); else setExpandedMusicItemId(null); }} />}
+                        : <MusicTrackBrowser tracks={tracks} query={musicQuery} loading={musicLoading} loadingMore={musicLoadingMore} hasMore={musicHasMore} selectedId={item.music?.id ?? null} previewingId={previewingId} fetchingTrackIds={fetchingTrackIds} onFetch={(track) => void fetchTrack(track)} onQueryChange={setMusicQuery} onLoadMore={() => void loadMoreTracks()} onPreview={(track) => togglePreview(toMusic(track))} onSelect={(track) => selectItemMusic(item.id, track)} onClose={() => { if (item.music) setItemBrowserId(null); else setExpandedMusicItemId(null); }} />}
                     </div>}
                   </div>}
                 </article>;
@@ -575,7 +576,7 @@ export function PostCreationStudio({ userId, onBack, onClose, onDraftSaved, onPu
               {!hasImage
                 ? <div className="shared-music-empty"><span>Music is unavailable for a video-only post.</span></div>
                 : sharedBrowserOpen
-                  ? <TrackBrowser tracks={tracks} query={musicQuery} loading={musicLoading} loadingMore={musicLoadingMore} hasMore={musicHasMore} selectedId={sharedMusic?.id ?? null} previewingId={previewingId} fetchingTrackIds={fetchingTrackIds} onFetch={(track) => void fetchTrack(track)} onQueryChange={setMusicQuery} onLoadMore={() => void loadMoreTracks()} onPreview={(track) => togglePreview(toMusic(track))} onSelect={requestSharedTrack} onClose={() => setSharedBrowserOpen(false)} />
+                  ? <MusicTrackBrowser tracks={tracks} query={musicQuery} loading={musicLoading} loadingMore={musicLoadingMore} hasMore={musicHasMore} selectedId={sharedMusic?.id ?? null} previewingId={previewingId} fetchingTrackIds={fetchingTrackIds} onFetch={(track) => void fetchTrack(track)} onQueryChange={setMusicQuery} onLoadMore={() => void loadMoreTracks()} onPreview={(track) => togglePreview(toMusic(track))} onSelect={requestSharedTrack} onClose={() => setSharedBrowserOpen(false)} />
                   : sharedMusic
                     ? <><SelectedTrackEditor music={sharedMusic} start={sharedStart} end={sharedEnd} playing={previewingId === sharedMusic.id} onRangeChange={(startValue, endValue) => { setSharedStart(startValue); setSharedEnd(endValue); }} onPlayToggle={() => togglePreview(sharedMusic, sharedStart, sharedEnd)} onRangeCommit={(startValue, endValue) => togglePreview(sharedMusic, startValue, endValue, true)} onInteractionStart={stopPreview} onReplace={() => setSharedBrowserOpen(true)} onRemove={removeSharedMusic} /><div className="neutral-info-banner"><Info size={16} /><span>This track will play across the complete post. Individual media music controls are hidden while shared music is active.</span></div></>
                     : <div className="shared-music-empty"><span>No shared track is selected. You can assign music separately to each media item in the previous step.</span><div><button type="button" onClick={() => setSharedBrowserOpen(true)}><Music2 size={16} /> Add shared music</button><button type="button" onClick={openItemMusic}>Edit item music</button></div></div>}
@@ -617,52 +618,6 @@ function MusicArtwork({ music }: { music: MusicSelection }) {
   return music.artwork
     ? <img className="music-artwork" src={music.artwork} alt="" />
     : <span className="music-artwork fallback"><Music2 size={18} /></span>;
-}
-
-function TrackBrowser({ tracks, query, loading, loadingMore, hasMore, selectedId, previewingId, fetchingTrackIds, onFetch, onQueryChange, onLoadMore, onPreview, onSelect, onClose }: {
-  tracks: MusicDto[];
-  query: string;
-  loading: boolean;
-  loadingMore: boolean;
-  hasMore: boolean;
-  selectedId: string | null;
-  previewingId: string | null;
-  fetchingTrackIds: Set<string>;
-  onFetch: (track: MusicDto) => void;
-  onQueryChange: (value: string) => void;
-  onLoadMore: () => void;
-  onPreview: (track: MusicDto) => void;
-  onSelect: (track: MusicDto) => void;
-  onClose: () => void;
-}) {
-  return <section className="track-browser">
-    <header><strong>{query ? "Search results" : "Suggested tracks"}</strong><button type="button" onClick={onClose} aria-label="Close music browser"><X size={17} /></button></header>
-    <label className="track-search"><Search size={17} /><input value={query} onChange={(event) => onQueryChange(event.target.value)} placeholder="Search tracks or artists" autoFocus />{query && <button type="button" onClick={() => onQueryChange("")} aria-label="Clear search"><X size={15} /></button>}</label>
-    {loading ? <div className="track-browser-state"><span /><span /><span /></div>
-      : tracks.length ? <div className="track-results">{tracks.map((track) => {
-        const selected = selectedId === track.id;
-        const playing = previewingId === track.id;
-        const music = {
-          id: track.id,
-          title: track.displayName,
-          artist: track.singleName || track.category || "Unknown artist",
-          url: track.songUrl ?? "",
-          artwork: track.displayImages || "",
-          duration: track.duration || 0
-        };
-        const fetching = fetchingTrackIds.has(track.id);
-        const ready = track.fetched && Boolean(track.songUrl);
-        return <article key={track.id} className={selected ? "selected" : ""}>
-          <MusicArtwork music={music} />
-          <span><strong>{music.title}</strong><small>{music.artist} · {formatTime(music.duration)}</small></span>
-          {ready ? <>
-            <button type="button" onClick={() => onPreview(track)} aria-label={`${playing ? "Pause" : "Preview"} ${music.title}`}>{playing ? <Pause size={16} /> : <Play size={16} />}</button>
-            <button type="button" className="track-select" onClick={() => onSelect(track)} aria-label={`Select ${music.title}`}>{selected ? <Check size={16} /> : "Select"}</button>
-          </> : <button type="button" className="track-fetch" onClick={() => onFetch(track)} disabled={fetching} aria-label={`${fetching ? "Processing" : "Fetch"} ${music.title}`}>{fetching ? "Processing…" : "Fetch"}</button>}
-        </article>;
-      })}{hasMore && <button type="button" className="track-load-more" onClick={onLoadMore} disabled={loadingMore}>{loadingMore ? "Loading more..." : "Load more"}</button>}</div>
-        : <div className="track-empty"><Music2 size={20} /><strong>No tracks found</strong><span>Try another title or artist.</span></div>}
-  </section>;
 }
 
 function SelectedTrackEditor({ music, start, end, playing, onRangeChange, onPlayToggle, onRangeCommit, onInteractionStart, onReplace, onRemove }: {
