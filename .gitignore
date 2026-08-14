@@ -1,9 +1,9 @@
-node_modules
-dist
+node_modules/
+dist/
 .env
 .DS_Store
-./docs
-./logs
-./public
-./firebase-messaging-sw.js
-./.env.example
+docs/
+logs/
+public/
+firebase-messaging-sw.js
+.env.example
