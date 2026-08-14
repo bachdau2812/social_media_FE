@@ -1,7 +1,6 @@
 import { ApiError } from "./apiError";
 
-export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8888/app";
-
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "/app";
 export type ApiEnvelope<T> = { code?: number | string; message?: string; traceId?: string; result?: T };
 export type ApiRequestOptions = { signal?: AbortSignal };
 
