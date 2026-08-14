@@ -90,6 +90,7 @@ function messagePage(conversationId: string): CursorPageDto<ChatMessageDto> {
 }
 
 afterEach(() => {
+  sessionStorage.clear();
   chatApi.conversations.mockReset();
   chatApi.messages.mockReset();
   chatRealtime.subscribe.mockClear();

@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Avatar } from "../../../shared/components";
 import { formatRelativeTime } from "../../../shared/utils";
 import { notificationApi } from "../api/notification.api";
+import { refreshNotificationUnreadCount, setNotificationUnreadCount } from "../hooks/useNotificationUnreadCount";
 import { notificationCategory, normalizedNotificationAction, notificationToViewItem } from "../model/notification.mapper";
 import type { NotificationFilter, NotificationViewItem } from "../model/notification.types";
 import { resolveNotificationRoute, type AppDestination } from "../core";
@@ -19,6 +20,7 @@ export function NotificationScreen({ userId, onNavigate }: {
   const [error, setError] = useState("");
   const requestController = useRef<AbortController | null>(null);
   const requestVersion = useRef(0);
+  const rowsRef = useRef<NotificationViewItem[]>([]);
   const filters: Array<{ id: NotificationFilter; label: string }> = [
     { id: "ALL", label: "Tất cả" },
     { id: "INTERACTIONS", label: "Tương tác" },
@@ -26,12 +28,17 @@ export function NotificationScreen({ userId, onNavigate }: {
     { id: "SYSTEM", label: "Hệ thống" },
   ];
 
+  useEffect(() => {
+    rowsRef.current = rows;
+  }, [rows]);
+
   const load = useCallback(async (preserveRows = false) => {
     requestController.current?.abort();
     const controller = new AbortController();
     const version = ++requestVersion.current;
+    const keepVisibleRows = preserveRows || rowsRef.current.length > 0;
     requestController.current = controller;
-    if (!preserveRows) {
+    if (!keepVisibleRows) {
       setRows([]);
       setStatus("loading");
     }
@@ -43,7 +50,7 @@ export function NotificationScreen({ userId, onNavigate }: {
       setStatus("ready");
     } catch (reason) {
       if (controller.signal.aborted || version !== requestVersion.current) return;
-      if (preserveRows) {
+      if (keepVisibleRows) {
         setStatus("ready");
         setError("Không thể làm mới thông báo. Dữ liệu đang hiển thị vẫn được giữ lại.");
       } else {
@@ -68,6 +75,7 @@ export function NotificationScreen({ userId, onNavigate }: {
     setError("");
     try {
       await notificationApi.markAllRead(userId);
+      setNotificationUnreadCount(0);
     } catch {
       setRows(previous);
       setError("Không thể đánh dấu tất cả thông báo đã đọc. Vui lòng thử lại.");
@@ -80,6 +88,7 @@ export function NotificationScreen({ userId, onNavigate }: {
     setError("");
     try {
       await notificationApi.markRead(item.id);
+      refreshNotificationUnreadCount();
     } catch {
       setRows((current) => current.map((row) => row.id === item.id ? { ...row, status: item.status } : row));
       setError("Không thể đánh dấu thông báo đã đọc. Vui lòng thử lại.");
@@ -121,7 +130,7 @@ export function NotificationScreen({ userId, onNavigate }: {
     <div className="notification-filters" role="tablist" aria-label="Bộ lọc thông báo">
       {filters.map((item) => <button key={item.id} className={filter === item.id ? "active" : ""} onClick={() => setFilter(item.id)} role="tab" aria-selected={filter === item.id}>{item.label}</button>)}
     </div>
-    {status === "loading" && <NotificationSkeleton />}
+    {status === "loading" && rows.length === 0 && <NotificationSkeleton />}
     {status === "error" && <div className="notification-state"><WifiOff size={24} /><strong>Không thể tải</strong><span>{error}</span><button onClick={() => void load(false)}>Thử lại</button></div>}
     {status === "ready" && error && <div className="notification-refresh-error" role="alert">{error}<button onClick={() => void load(true)}>Thử lại</button></div>}
     {status === "ready" && rows.length === 0 && <div className="notification-state"><Bell size={24} /><strong>Chưa có thông báo</strong><span>Hoạt động mới sẽ xuất hiện tại đây.</span><button onClick={() => void load()}>Làm mới</button></div>}

@@ -29,6 +29,9 @@ export type HomeScreenProps = {
 export function HomeScreen(props: HomeScreenProps) {
   const [touchStart, setTouchStart] = useState<number | null>(null);
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
+  const hasPosts = props.posts.length > 0;
+  const initialLoading = props.status === "loading" && !hasPosts;
+  const showFeedContent = props.status !== "error" && (props.status !== "loading" || hasPosts);
 
   useEffect(() => {
     const node = loadMoreRef.current;
@@ -49,7 +52,7 @@ export function HomeScreen(props: HomeScreenProps) {
 
   return (
     <section
-      className="screen feed-screen"
+      className={`screen feed-screen ${props.status === "loading" && hasPosts ? "is-refreshing" : ""}`}
       onTouchStart={(event) => setTouchStart(shouldStartFeedTabSwipe(event.target) ? event.touches[0]?.clientX ?? null : null)}
       onTouchEnd={(event) => handleTouchEnd(event.changedTouches[0]?.clientX ?? 0)}
     >
@@ -62,16 +65,16 @@ export function HomeScreen(props: HomeScreenProps) {
           <button className={props.tab === "FRIENDS" ? "active" : ""} onClick={() => props.setTab("FRIENDS")} role="tab" aria-selected={props.tab === "FRIENDS"}>Friends</button>
         </div>
       </div>
-      {props.status === "loading" && <SkeletonFeed />}
+      {initialLoading && <SkeletonFeed />}
       {props.status === "error" && <FeedState icon={WifiOff} title="No internet" detail="Feed could not be loaded from the backend." />}
-      {props.status !== "loading" && props.status !== "error" && props.posts.length === 0 && (
+      {showFeedContent && !hasPosts && (
         <FeedState
           icon={props.tab === "FRIENDS" ? Users : Compass}
           title={props.tab === "FRIENDS" ? "Empty Friends feed" : "No posts yet"}
           detail={props.tab === "FRIENDS" ? "Mutual friends have not posted yet." : "Discovery has no posts available."}
         />
       )}
-      {props.status !== "loading" && props.status !== "error" && (
+      {showFeedContent && hasPosts && (
         <div className="post-stack">
           {props.posts.map((post, index) => (
             <PostCard
@@ -88,12 +91,12 @@ export function HomeScreen(props: HomeScreenProps) {
           ))}
         </div>
       )}
-      {props.status === "ready" && props.posts.length > 0 && props.hasMore && (
+      {props.status === "ready" && hasPosts && props.hasMore && (
         <div ref={loadMoreRef} className="feed-load-sentinel" aria-label="Load more posts">
           {props.loadingMore && <span>Loading more...</span>}
         </div>
       )}
-      {props.status === "ready" && props.posts.length > 0 && !props.hasMore && <p className="end-feed">End of feed</p>}
+      {props.status === "ready" && hasPosts && !props.hasMore && <p className="end-feed">End of feed</p>}
     </section>
   );
 }

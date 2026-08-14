@@ -139,11 +139,13 @@ export function StoryViewerController({ stories, index, currentUserId, onClose, 
     const next = !previous;
     setLikeOverrides((values) => ({ ...values, [storyId]: next }));
     setLikePendingIds((ids) => new Set(ids).add(storyId));
+    setReplyErrors((errors) => ({ ...errors, [storyId]: null }));
     try {
       if (next) await storyApi.like(storyId);
       else await storyApi.unlike(storyId);
     } catch {
       setLikeOverrides((values) => ({ ...values, [storyId]: previous }));
+      setReplyErrors((errors) => ({ ...errors, [storyId]: "Không thể cập nhật lượt thích. Vui lòng thử lại." }));
     } finally {
       setLikePendingIds((ids) => {
         const nextIds = new Set(ids);

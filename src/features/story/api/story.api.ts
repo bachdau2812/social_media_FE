@@ -17,10 +17,10 @@ export const storyApi = {
     return apiSend<void>(`/profile-media/stories/${encodeURIComponent(storyId)}/views?${params.toString()}`, "POST");
   },
   like(storyId: string) {
-    return apiSend<void>(`/profile-media/stories/${encodeURIComponent(storyId)}/like`, "PUT");
+    return apiSend<boolean>(`/profile-media/stories/${encodeURIComponent(storyId)}/like`, "PUT");
   },
   unlike(storyId: string) {
-    return apiSend<void>(`/profile-media/stories/${encodeURIComponent(storyId)}/like`, "DELETE");
+    return apiSend<boolean>(`/profile-media/stories/${encodeURIComponent(storyId)}/like`, "DELETE");
   },
   reply(storyId: string, body: { content: string; clientMessageId: string; previewAtMs: number }) {
     return apiSend<StoryReplyResponseDto>(

@@ -8,9 +8,10 @@ afterEach(cleanup);
 describe("mobile application navigation", () => {
   it("shows Chat in the bottom navigation with the shared unread count", () => {
     const onNavigate = vi.fn();
-    render(<MobileNav active="home" chatUnreadCount={12} onNavigate={onNavigate} />);
+    render(<MobileNav active="home" chatUnreadCount={12} notificationUnreadCount={7} onNavigate={onNavigate} />);
 
     expect(screen.getByRole("button", { name: "Chat, 12 unread" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Alerts, 7 unread" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Library" })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Chat, 12 unread" }));

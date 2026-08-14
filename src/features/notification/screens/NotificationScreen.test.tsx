@@ -63,12 +63,26 @@ describe("NotificationScreen requests", () => {
     notificationApi.list.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
     render(<NotificationScreen userId="viewer-1" onNavigate={vi.fn()} />);
 
-    await userEvent.click(screen.getByRole("tab", { name: "Tương tác" }));
+    await userEvent.click(screen.getByRole("tab", { name: /Tương tác/ }));
     second.resolve(page("New Actor", "new"));
     expect(await screen.findByText("New Actor")).toBeInTheDocument();
 
     first.resolve(page("Stale Actor", "stale"));
     await waitFor(() => expect(screen.queryByText("Stale Actor")).not.toBeInTheDocument());
+  });
+
+  it("keeps rendered notifications visible while a new filter request is pending", async () => {
+    const next = deferred<Page<NotificationDto>>();
+    notificationApi.list
+      .mockResolvedValueOnce(page("Visible Actor", "visible"))
+      .mockReturnValueOnce(next.promise);
+    render(<NotificationScreen userId="viewer-1" onNavigate={vi.fn()} />);
+    expect(await screen.findByText("Visible Actor")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("tab", { name: /Tương tác/ }));
+
+    expect(screen.getByText("Visible Actor")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Đang tải thông báo")).not.toBeInTheDocument();
   });
 
   it("keeps rendered notifications when a realtime refresh fails", async () => {
@@ -91,7 +105,7 @@ describe("NotificationScreen requests", () => {
 
     await userEvent.click(await screen.findByRole("button", { name: /Visible Actor/ }));
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("Không thể đánh dấu thông báo đã đọc");
+    expect(await screen.findByRole("alert")).toHaveTextContent("Không thể đánh dấu");
     expect(screen.getByText("Visible Actor").closest("article")).toHaveClass("unread");
   });
 });

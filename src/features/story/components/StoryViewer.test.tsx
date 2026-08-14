@@ -127,6 +127,7 @@ describe("StoryViewer", () => {
     fireEvent.click(control);
     expect(control).toHaveClass("active");
     await waitFor(() => expect(control).not.toHaveClass("active"));
+    expect(screen.getByRole("alert")).toHaveTextContent("Không thể cập nhật lượt thích");
     expect(like).toHaveBeenCalledWith("like-me");
   });
 

@@ -33,7 +33,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   async function login(username: string, password: string) {
-    setStatus("loading");
     setError("");
     try {
       const authenticated = await apiSend<AppSession>("/auth/login", "POST", {

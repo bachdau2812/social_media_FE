@@ -4,6 +4,7 @@ import { chatRealtime, type ChatRealtimeEvent } from "../services/chatRealtime";
 import { useChatMediaComposer } from "./useChatMediaComposer";
 import { chatApi } from "../api/chat.api";
 import { chatMessageToModel, conversationToThread } from "../model/chat.mapper";
+import { clearStoredFullChatTarget, readStoredFullChatTarget, writeStoredFullChatTarget } from "../model/chatNavigationPersistence";
 import type { ChatMessage, ChatNavigationTarget, ChatReply, ChatThread } from "../model/chat.types";
 
 function uuid() { return crypto.randomUUID(); }
@@ -21,8 +22,9 @@ function statusFor(message: ChatMessage, viewerId: string, delivered: number, re
 }
 
 export function useChatController(userId: string, initialTarget?: ChatNavigationTarget | null) {
+  const restoredTarget = useRef<ChatNavigationTarget | null>(initialTarget ?? readStoredFullChatTarget());
   const [threads, setThreads] = useState<ChatThread[]>([]);
-  const [activeId, setActiveId] = useState<string | null>(initialTarget?.conversationId || null);
+  const [activeId, setActiveId] = useState<string | null>(restoredTarget.current?.conversationId || null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [threadState, setThreadState] = useState<"loading" | "ready" | "error">("loading");
   const [messageState, setMessageState] = useState<"idle" | "loading" | "ready" | "error">("idle");
@@ -48,12 +50,12 @@ export function useChatController(userId: string, initialTarget?: ChatNavigation
       const next = (page.items || []).map((item) => conversationToThread(item, userId));
       next.forEach((thread) => chatRealtime.rememberRecipientCursor(thread.id, thread.recipientDeliveredSeq, thread.recipientReadSeq));
       setThreads(next);
-      if (preferredId || initialTarget?.conversationId) setActiveId(preferredId || initialTarget?.conversationId || null);
+      if (preferredId) setActiveId(preferredId);
       setThreadState("ready");
     } catch {
       setThreadState("error");
     }
-  }, [initialTarget?.conversationId, userId]);
+  }, [userId]);
 
   const loadMessages = useCallback(async (conversationId: string) => {
     messageRequestController.current?.abort();
@@ -203,11 +205,15 @@ export function useChatController(userId: string, initialTarget?: ChatNavigation
   }
 
   function openConversation(conversationId: string) {
+    restoredTarget.current = { conversationId };
+    writeStoredFullChatTarget({ conversationId });
     setActiveId(conversationId);
     setFocused(false);
   }
 
   function closeConversation() {
+    restoredTarget.current = null;
+    clearStoredFullChatTarget();
     setActiveId(null);
     setFocused(false);
     setReplyTo(null);

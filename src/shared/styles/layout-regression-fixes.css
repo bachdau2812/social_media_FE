@@ -28,3 +28,44 @@
   }
 }
 
+/* Outgoing DOM is actions then bubble, matching the floating-chat adapter. */
+.dm-bubble-row.outgoing .dm-message-content {
+  flex-direction: row;
+  justify-content: flex-end;
+}
+
+.dm-bubble-row.image-message.incoming .dm-message-content {
+  justify-content: flex-start;
+}
+
+.dm-bubble-row.image-message.outgoing .dm-message-content {
+  justify-content: flex-end;
+}
+
+.feed-screen.is-refreshing .post-stack,
+.notifications-screen .notification-list,
+.notifications-screen .notification-state {
+  min-height: min(560px, calc(100dvh - 260px));
+}
+
+.profile-screen .profile-tabs + .profile-grid,
+.profile-screen .profile-tabs + .empty-state {
+  min-height: min(540px, calc(100dvh - 360px));
+}
+
+.connections-modal .connections-list,
+.connections-modal .connection-state {
+  min-height: min(420px, calc(100dvh - 240px));
+}
+
+@media (max-width: 767px) {
+  .feed-screen.is-refreshing .post-stack,
+  .notifications-screen .notification-list,
+  .notifications-screen .notification-state,
+  .profile-screen .profile-tabs + .profile-grid,
+  .profile-screen .profile-tabs + .empty-state,
+  .connections-modal .connections-list,
+  .connections-modal .connection-state {
+    min-height: 320px;
+  }
+}

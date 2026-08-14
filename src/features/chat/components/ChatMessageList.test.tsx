@@ -1,4 +1,6 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { useChatController } from "../hooks/useChatController";
 import type { ChatMessage } from "../model/chat.types";
@@ -7,6 +9,17 @@ import { ChatMessageList } from "./ChatMessageList";
 afterEach(cleanup);
 
 type Controller = ReturnType<typeof useChatController>;
+
+const messagingCss = [
+  readFileSync(
+    resolve(process.cwd(), "src/features/chat/styles/messaging-advanced.css"),
+    "utf8",
+  ),
+  readFileSync(
+    resolve(process.cwd(), "src/shared/styles/layout-regression-fixes.css"),
+    "utf8",
+  ),
+].join("\n");
 
 function message(id: string, senderId: string): ChatMessage {
   return {
@@ -18,6 +31,22 @@ function message(id: string, senderId: string): ChatMessage {
     content: `message-${id}`,
     createdAt: "2026-07-30T08:00:00Z",
     status: "sent",
+  };
+}
+
+function imageMessage(id: string, senderId: string): ChatMessage {
+  return {
+    ...message(id, senderId),
+    messageType: "IMAGE",
+    content: "image-caption",
+    metadata: {
+      items: [{
+        id: `image-${id}`,
+        url: `https://host/image-${id}.jpg`,
+        width: 1200,
+        height: 800,
+      }],
+    },
   };
 }
 
@@ -49,6 +78,32 @@ describe("ChatMessageList", () => {
     rerender(<ChatMessageList {...common} compact={false} />);
     expect(container.querySelector(".dm-bubble-row.outgoing .dm-message-content")).toHaveClass("outgoing");
     expect(container.querySelector(".dm-bubble-row.incoming .dm-message-content")).toHaveClass("incoming");
+  });
+
+  it("keeps image media and captions on the same horizontal content edge in both chat surfaces", () => {
+    const messages = [imageMessage("5", "me"), imageMessage("6", "other")];
+    const common = {
+      controller: controller(messages),
+      userId: "me",
+      onOpenMedia: vi.fn(),
+      onOpenStory: vi.fn(),
+    };
+    const { container, rerender } = render(<ChatMessageList {...common} compact={false} />);
+
+    expect(container.querySelectorAll(".dm-bubble.image-message .chat-media-group.media-card")).toHaveLength(2);
+
+    rerender(<ChatMessageList {...common} compact />);
+
+    expect(container.querySelectorAll(".floating-bubble.image-message .chat-media-group.media-card")).toHaveLength(2);
+    expect(messagingCss).not.toMatch(
+      /\.chat-media-group\.media-card \.chat-media-mosaic\s*\{[^}]*padding-inline:\s*10px;/s,
+    );
+    expect(messagingCss).toMatch(
+      /\.dm-bubble-row\.outgoing \.dm-message-content\s*\{[^}]*flex-direction:\s*row;[^}]*justify-content:\s*flex-end;/s,
+    );
+    expect(messagingCss).toMatch(
+      /\.chat-media-group\.media-card > figcaption,[\s\S]*?\{[^}]*padding:\s*8px 10px;/s,
+    );
   });
 
   it("uses the shared Story reply renderer in full and compact surfaces", () => {

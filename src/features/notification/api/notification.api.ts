@@ -5,6 +5,9 @@ export const notificationApi = {
   list(userId: string, filter: NotificationFilter, page = 0, size = 50, signal?: AbortSignal) {
     return apiGet<Page<NotificationDto>>(`/notifications?userId=${encodeURIComponent(userId)}&filter=${filter}&page=${page}&size=${size}`, { signal });
   },
+  unreadCount(userId: string) {
+    return apiGet<number>(`/notifications/unread-count?userId=${encodeURIComponent(userId)}`);
+  },
   markRead(notificationId: string) {
     return apiSend<void>(`/notifications/${encodeURIComponent(notificationId)}/read`, "POST");
   },

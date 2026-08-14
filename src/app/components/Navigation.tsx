@@ -14,12 +14,30 @@ const navItems: Array<{ id: ViewKey; label: string; icon: typeof Home }> = [
 
 const mobileNavItems = navItems.filter((item) => ["home", "search", "create", "notifications", "chat"].includes(item.id));
 
-export function Navigation({ active, chatUnreadCount, onNavigate, onReloadHome, onLogout }: { active: ViewKey; chatUnreadCount: number; onNavigate: (view: ViewKey) => void; onReloadHome: () => void; onLogout: () => void }) {
+type UnreadNavigationProps = {
+  chatUnreadCount: number;
+  notificationUnreadCount: number;
+};
+
+function unreadCountFor(view: ViewKey, counts: UnreadNavigationProps) {
+  if (view === "chat") return counts.chatUnreadCount;
+  if (view === "notifications") return counts.notificationUnreadCount;
+  return 0;
+}
+
+function unreadBadge(count: number) {
+  return count > 0 ? <em className="nav-unread-badge">{count > 99 ? "99+" : count}</em> : null;
+}
+
+export function Navigation({ active, chatUnreadCount, notificationUnreadCount, onNavigate, onReloadHome, onLogout }: { active: ViewKey; onNavigate: (view: ViewKey) => void; onReloadHome: () => void; onLogout: () => void } & UnreadNavigationProps) {
+  const counts = { chatUnreadCount, notificationUnreadCount };
   return <nav className="nav-rail" aria-label="Main navigation">
     <div className="nav-list">{navItems.map((item) => {
       const Icon = item.icon;
-      return <button key={item.id} className={active === item.id ? "nav-item active" : "nav-item"} onClick={item.id === "home" ? onReloadHome : () => onNavigate(item.id)} title={item.label} aria-label={item.label}>
-        <i className="nav-icon-wrap"><Icon size={20} />{item.id === "chat" && chatUnreadCount > 0 && <em className="nav-unread-badge">{chatUnreadCount > 99 ? "99+" : chatUnreadCount}</em>}</i>
+      const unreadCount = unreadCountFor(item.id, counts);
+      const unreadLabel = unreadCount > 0 ? `, ${unreadCount} unread` : "";
+      return <button key={item.id} className={active === item.id ? "nav-item active" : "nav-item"} onClick={item.id === "home" ? onReloadHome : () => onNavigate(item.id)} title={item.label} aria-label={`${item.label}${unreadLabel}`}>
+        <i className="nav-icon-wrap"><Icon size={20} />{unreadBadge(unreadCount)}</i>
         <span>{item.label}</span>
       </button>;
     })}</div>
@@ -27,15 +45,16 @@ export function Navigation({ active, chatUnreadCount, onNavigate, onReloadHome, 
   </nav>;
 }
 
-export function MobileNav({ active, chatUnreadCount, onNavigate }: { active: ViewKey; chatUnreadCount: number; onNavigate: (view: ViewKey) => void }) {
+export function MobileNav({ active, chatUnreadCount, notificationUnreadCount, onNavigate }: { active: ViewKey; onNavigate: (view: ViewKey) => void } & UnreadNavigationProps) {
+  const counts = { chatUnreadCount, notificationUnreadCount };
   return <nav className="mobile-nav" aria-label="Mobile navigation">{mobileNavItems.map((item) => {
     const Icon = item.icon;
-    const unreadLabel = item.id === "chat" && chatUnreadCount > 0 ? `, ${chatUnreadCount} unread` : "";
-    return <button key={item.id} className={active === item.id ? "active" : ""} onClick={() => onNavigate(item.id)} aria-label={`${item.label}${unreadLabel}`}><span className="mobile-nav-icon"><Icon size={21} />{item.id === "chat" && chatUnreadCount > 0 && <em className="nav-unread-badge">{chatUnreadCount > 99 ? "99+" : chatUnreadCount}</em>}</span></button>;
+    const unreadCount = unreadCountFor(item.id, counts);
+    const unreadLabel = unreadCount > 0 ? `, ${unreadCount} unread` : "";
+    return <button key={item.id} className={active === item.id ? "active" : ""} onClick={() => onNavigate(item.id)} aria-label={`${item.label}${unreadLabel}`}><span className="mobile-nav-icon"><Icon size={21} />{unreadBadge(unreadCount)}</span></button>;
   })}</nav>;
 }
 
 export function InlineError({ message, onRetry }: { message: string; onRetry: () => void }) {
   return <div className="inline-error"><span>{message}</span><button onClick={onRetry}>Retry</button></div>;
 }
-

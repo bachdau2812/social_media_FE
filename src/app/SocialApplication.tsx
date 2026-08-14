@@ -7,7 +7,7 @@ import { postDetailsToPost as mapPostDetailsToPost, usePostEventStream, type Pos
 import { profileApi, profileToIdentity, profileToView as mapProfileToView, type ConnectionTab, type ConnectionUserDto, type Profile, type ProfileDto as FeatureProfileDto } from "../features/profile";
 import { archivedStoryToItem, type StoryArchiveDto, type StoryItem } from "../features/story";
 import { ChatScreen, FloatingMessenger, useChatUnreadCount, type ChatNavigationTarget, type ConversationDto } from "../features/chat";
-import { NotificationScreen as FeatureNotificationScreen, startForegroundPushNotifications, stopForegroundPushNotifications, syncGrantedPushRegistration } from "../features/notification";
+import { NotificationScreen as FeatureNotificationScreen, refreshNotificationUnreadCount, startForegroundPushNotifications, stopForegroundPushNotifications, syncGrantedPushRegistration, useNotificationUnreadCount } from "../features/notification";
 import { ConnectionsModal, ProfileScreen } from "../features/profile";
 import { CreateContentMenu } from "./components/CreateContentMenu";
 import { consumePendingNotificationDestination, decodeNotificationDeepLink, savePendingNotificationDestination, subscribeToNotificationNavigation, type AppDestination } from "../features/notification";
@@ -105,6 +105,7 @@ export default function SocialApplication() {
     const [errorText, setErrorText] = useState("");
     const [appToast, setAppToast] = useState("");
     const chatUnreadCount = useChatUnreadCount(session?.userId);
+    const notificationUnreadCount = useNotificationUnreadCount(session?.userId);
     const viewportMode = useViewportMode();
     const [createMenuOpen, setCreateMenuOpen] = useState(false);
     const [miniChatRequest, setMiniChatRequest] = useState<(ChatNavigationTarget & {
@@ -163,6 +164,7 @@ export default function SocialApplication() {
         void startForegroundPushNotifications({
             getActiveDestination: () => view === "chat" && fullChatTarget ? { kind: "conversation", conversationId: fullChatTarget.conversationId } : selectedPost ? { kind: "post", postId: selectedPost.id } : null,
             onReceived: () => {
+                refreshNotificationUnreadCount();
                 if (view === "notifications")
                     window.dispatchEvent(new Event("notification-refresh"));
             },
@@ -645,9 +647,9 @@ export default function SocialApplication() {
       <ResponsiveAppShell
         className={shellClassName}
         viewportMode={viewportMode}
-        desktopNavigation={<Navigation active={view} chatUnreadCount={chatUnreadCount} onNavigate={navigateToView} onReloadHome={reloadHomeFromSidebar} onLogout={handleLogout}/>}
+        desktopNavigation={<Navigation active={view} chatUnreadCount={chatUnreadCount} notificationUnreadCount={notificationUnreadCount} onNavigate={navigateToView} onReloadHome={reloadHomeFromSidebar} onLogout={handleLogout}/>}
         mobileHeader={showMobileChrome ? <MobileAppHeader title={MOBILE_VIEW_TITLES[view]} canGoBack={showBackButton && view !== "chat"} onBack={handleBackNavigation} onNavigate={navigateToView}/> : null}
-        mobileNavigation={showMobileChrome ? <MobileNav active={view} chatUnreadCount={chatUnreadCount} onNavigate={navigateToView}/> : null}
+        mobileNavigation={showMobileChrome ? <MobileNav active={view} chatUnreadCount={chatUnreadCount} notificationUnreadCount={notificationUnreadCount} onNavigate={navigateToView}/> : null}
         rightRail={view === "home" ? <aside className="right-rail"><SuggestedFriendsPanel viewerId={session.userId} onOpenProfile={openProfile} onOpenChat={openChatForUser}/></aside> : null}
       >
         {showBackButton && viewportMode !== "mobile" && view !== "chat" && <button type="button" className="app-back-button" onClick={handleBackNavigation} aria-label="Quay lại màn trước" title="Quay lại"><ChevronLeft size={20}/></button>}

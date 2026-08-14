@@ -20,7 +20,7 @@ function asSequence(value: string | null) {
 function decodeBackendPath(url: URL): AppDestination | null {
   const pathname = url.pathname.replace(/^\/app(?=\/)/, "");
   const params = url.searchParams;
-  if (pathname === "/" || pathname === "") return { kind: "home" };
+  if (pathname === "/" || pathname === "") return null;
   if (pathname === "/messages") {
     const conversationId = asNonEmpty(params.get("conversationId"));
     if (!conversationId) return null;
