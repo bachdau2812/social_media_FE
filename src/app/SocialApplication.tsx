@@ -22,6 +22,7 @@ import { MobileAppHeader } from "./components/MobileAppHeader";
 import { HomeScreen, useFeedController } from "../features/feed";
 import { SystemStates } from "./components/SystemStates";
 import { useAuth } from "./providers/AuthProvider";
+import { useToast } from "./providers/ToastProvider";
 import { installPageVisibilityMediaController } from "./bootstrap/mediaController";
 import { ResponsiveAppShell } from "./layouts/ResponsiveAppShell";
 
@@ -103,7 +104,7 @@ export default function SocialApplication() {
     const [editingPost, setEditingPost] = useState<Post | null>(null);
     const [status, setStatus] = useState<LoadState>("idle");
     const [errorText, setErrorText] = useState("");
-    const [appToast, setAppToast] = useState("");
+    const { showToast: showAppToast } = useToast();
     const chatUnreadCount = useChatUnreadCount(session?.userId);
     const notificationUnreadCount = useNotificationUnreadCount(session?.userId);
     const viewportMode = useViewportMode();
@@ -187,15 +188,6 @@ export default function SocialApplication() {
         if (session)
             void loadScreenData(view, session.userId, feedTab);
     }, [view, feedTab, session?.userId, profileUserId]);
-    useEffect(() => {
-        function handleToast(event: Event) {
-            const detail = (event as CustomEvent<string>).detail;
-            if (detail)
-                showAppToast(detail);
-        }
-        window.addEventListener("app-toast", handleToast);
-        return () => window.removeEventListener("app-toast", handleToast);
-    }, []);
     useFeedMediaSuspension({
         postDetailOpen: Boolean(selectedPost),
         storyCreatorOpen,
@@ -205,10 +197,6 @@ export default function SocialApplication() {
         if (data.result !== "FAILED" && session)
             void loadScreenData("home", session.userId, feedTab);
     }, feedTab);
-    function showAppToast(message: string) {
-        setAppToast(message);
-        window.setTimeout(() => setAppToast(""), 4200);
-    }
     async function handleLogin(username: string, password: string) {
         setErrorText("");
         try {
@@ -689,6 +677,5 @@ export default function SocialApplication() {
       {selectedPost && <PostDetail post={selectedPost} viewerId={session.userId} targetCommentId={targetCommentId} onClose={closePostDetail} onTogglePost={togglePost} onCommentCreated={incrementPostCommentCount} onEdit={() => setEditingPost(selectedPost)} onArchive={() => void handleArchivePost(selectedPost)} onOpenProfile={openProfile}/>}
       {editingPost && <PostEditDialog post={editingPost} userId={session.userId} onClose={() => setEditingPost(null)} onSaved={handlePostEdited}/>}
       {viewportMode !== "mobile" && view !== "chat" && <FloatingMessenger userId={session.userId} compactLauncher={view !== "home"} onOpenFullChat={() => navigateToView("chat")} onOpenStory={openStoryFromReply} openConversationRequest={miniChatRequest}/>}
-      {appToast && <div className="app-global-toast" role="status">{appToast}</div>}
     </>);
 }

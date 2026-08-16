@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { APP_TOAST_EVENT, LEGACY_SHARED_APP_TOAST_EVENT } from "../../shared/notifications/appToast";
 
 type ToastContextValue = { showToast: (message: string) => void };
 const ToastContext = createContext<ToastContextValue | null>(null);
@@ -14,14 +15,18 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       const detail = (event as CustomEvent<string>).detail;
       if (detail) showToast(detail);
     };
-    window.addEventListener("shared-app-toast", listener);
-    return () => window.removeEventListener("shared-app-toast", listener);
+    window.addEventListener(APP_TOAST_EVENT, listener);
+    window.addEventListener(LEGACY_SHARED_APP_TOAST_EVENT, listener);
+    return () => {
+      window.removeEventListener(APP_TOAST_EVENT, listener);
+      window.removeEventListener(LEGACY_SHARED_APP_TOAST_EVENT, listener);
+    };
   }, [showToast]);
   const value = useMemo(() => ({ showToast }), [showToast]);
   return (
     <ToastContext.Provider value={value}>
       {children}
-      {message ? <div className="global-toast-host" role="status">{message}</div> : null}
+      {message ? <div className="app-global-toast global-toast-host" role="status">{message}</div> : null}
     </ToastContext.Provider>
   );
 }
