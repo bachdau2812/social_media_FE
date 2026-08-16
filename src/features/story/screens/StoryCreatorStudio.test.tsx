@@ -2,6 +2,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { apiGet, apiSend } from "../../../shared/api";
 import { MUSIC_FETCH_RESULT_EVENT, type MusicDto } from "../../../shared/music";
+import { APP_TOAST_EVENT } from "../../../shared/notifications/appToast";
 import { StoryCreatorStudio } from "./StoryCreatorStudio";
 
 vi.mock("../../../shared/api", () => ({
@@ -35,12 +36,17 @@ class AudioStub {
 }
 
 describe("StoryCreatorStudio", () => {
+  let toastMessages: string[];
+  const captureToast = (event: Event) => toastMessages.push((event as CustomEvent<string>).detail);
+
   beforeEach(() => {
     AudioStub.instances = [];
     vi.stubGlobal("Audio", AudioStub);
     vi.mocked(apiGet).mockReset();
     vi.mocked(apiSend).mockReset();
     vi.mocked(apiSend).mockResolvedValue({ trackId: "1Gqm6KaobG2A1mFVjGnJsS", status: "STARTED" });
+    toastMessages = [];
+    window.addEventListener(APP_TOAST_EVENT, captureToast);
     vi.mocked(apiGet).mockResolvedValue({
       content: [{
         id: "music-1",
@@ -65,6 +71,7 @@ describe("StoryCreatorStudio", () => {
   });
 
   afterEach(() => {
+    window.removeEventListener(APP_TOAST_EVENT, captureToast);
     cleanup();
     vi.unstubAllGlobals();
   });
@@ -199,6 +206,7 @@ describe("StoryCreatorStudio", () => {
     fireEvent.click(fetchButton);
     fireEvent.click(fetchButton);
     await waitFor(() => expect(apiSend).toHaveBeenCalledTimes(1));
+    expect(toastMessages).toContain("Đang tải bài hát Unfetched Story Song...");
     expect(screen.getByRole("button", { name: "Processing Unfetched Story Song" })).toBeDisabled();
 
     const fetched = { ...unfetched, fetched: true, songUrl: "https://host/fetched.flac" };
@@ -247,5 +255,49 @@ describe("StoryCreatorStudio", () => {
     }));
 
     expect(await screen.findByRole("button", { name: "Fetch Failed Story Song" })).toBeEnabled();
+  });
+
+  it("emits the accepted toast before waiting for feed refresh", async () => {
+    let resolvePublished: (() => void) | undefined;
+    const onPublished = vi.fn(() => new Promise<void>((resolve) => { resolvePublished = resolve; }));
+    render(
+      <StoryCreatorStudio
+        userId="me"
+        onClose={vi.fn()}
+        onPublished={onPublished}
+        initialDraft={{
+          id: "draft-publish",
+          draftType: "STORY",
+          payload: JSON.stringify([{ id: "story-publish", secureUrl: "https://cdn.example/story.jpg", fileName: "story.jpg", mediaType: "IMAGE" }]),
+        }}
+      />,
+    );
+
+    await screen.findByAltText("story.jpg");
+    fireEvent.click(screen.getByRole("button", { name: "Đăng Story" }));
+    await waitFor(() => expect(onPublished).toHaveBeenCalledOnce());
+    expect(toastMessages).toContain("Story đang được xử lý và sẽ sớm hiển thị.");
+    resolvePublished?.();
+  });
+
+  it("emits an immediate toast when a Story cannot be submitted", async () => {
+    vi.mocked(apiSend).mockRejectedValueOnce(new Error("Story backend unavailable"));
+    render(
+      <StoryCreatorStudio
+        userId="me"
+        onClose={vi.fn()}
+        onPublished={vi.fn()}
+        initialDraft={{
+          id: "draft-rejected",
+          draftType: "STORY",
+          payload: JSON.stringify([{ id: "story-rejected", secureUrl: "https://cdn.example/story.jpg", fileName: "story.jpg", mediaType: "IMAGE" }]),
+        }}
+      />,
+    );
+
+    await screen.findByAltText("story.jpg");
+    fireEvent.click(screen.getByRole("button", { name: "Đăng Story" }));
+
+    await waitFor(() => expect(toastMessages).toContain("Story backend unavailable"));
   });
 });

@@ -191,11 +191,22 @@ export default function SocialApplication() {
     useFeedMediaSuspension({
         postDetailOpen: Boolean(selectedPost),
         storyCreatorOpen,
+        storyViewerOpen: selectedStoryIndex !== null,
     });
-    usePostEventStream(session?.userId, (data) => {
-        showAppToast(data.message || (data.result === "FAILED" ? "Không thể đăng tải bài viết" : "Bài viết đã được cập nhật"));
-        if (data.result !== "FAILED" && session)
-            void loadScreenData("home", session.userId, feedTab);
+    usePostEventStream(session?.userId, {
+        onUploadResult: (data) => {
+            const fallback = data.kind === "story"
+                ? data.success ? "Story đã được đăng" : "Không thể đăng Story"
+                : data.success ? "Bài viết đã được đăng" : "Không thể đăng bài viết";
+            showAppToast(data.message || fallback);
+            if (data.success && session)
+                void loadScreenData("home", session.userId, feedTab);
+        },
+        onMusicFetchResult: (data) => {
+            showAppToast(data.kind === "success"
+                ? `Đã tải xong bài hát ${data.music.displayName}`
+                : data.message || "Không thể tải bài hát");
+        },
     }, feedTab);
     async function handleLogin(username: string, password: string) {
         setErrorText("");

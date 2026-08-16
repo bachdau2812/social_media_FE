@@ -3,6 +3,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MUSIC_FETCH_RESULT_EVENT, type MusicDto } from "../../../shared/music";
+import { APP_TOAST_EVENT } from "../../../shared/notifications/appToast";
 import { PostCreationStudio } from "./PostCreationStudio";
 
 const apiGet = vi.fn();
@@ -35,22 +36,30 @@ const unfetched = track("1Gqm6KaobG2A1mFVjGnJsS", "Unfetched Song", false);
 const failed = track("2plbrEY59IikOBgBGLjaoe", "Failed Song", false);
 const ready = track("3n3Ppam7vgaVa1iaRUc9Lp", "Ready Song", true);
 
-afterEach(cleanup);
+let toastMessages: string[] = [];
+const captureToast = (event: Event) => toastMessages.push((event as CustomEvent<string>).detail);
+
+afterEach(() => {
+  window.removeEventListener(APP_TOAST_EVENT, captureToast);
+  cleanup();
+});
 
 beforeEach(() => {
   apiGet.mockReset();
   apiSend.mockReset();
+  toastMessages = [];
+  window.addEventListener(APP_TOAST_EVENT, captureToast);
   apiGet.mockResolvedValue({ content: [unfetched, failed, ready], pageNumber: 0, totalPages: 1 });
   apiSend.mockResolvedValue({ trackId: unfetched.id, status: "STARTED" });
 });
 
-function renderStudio() {
+function renderStudio(callbacks: { onPublished?: () => void; onClose?: () => void } = {}) {
   return render(<PostCreationStudio
     userId="user-1"
     onBack={vi.fn()}
-    onClose={vi.fn()}
+    onClose={callbacks.onClose ?? vi.fn()}
     onDraftSaved={vi.fn()}
-    onPublished={vi.fn()}
+    onPublished={callbacks.onPublished ?? vi.fn()}
     initialDraft={{
       id: "draft-1",
       draftType: "POST",
@@ -78,6 +87,7 @@ describe("PostCreationStudio Spotify fetch", () => {
     fireEvent.click(fetchButton);
     fireEvent.click(fetchButton);
     await waitFor(() => expect(apiSend).toHaveBeenCalledTimes(1));
+    expect(toastMessages).toContain("Đang tải bài hát Unfetched Song...");
     expect(screen.getByRole("button", { name: "Processing Unfetched Song" })).toBeDisabled();
 
     const fetched = { ...unfetched, fetched: true, songUrl: "https://host/fetched.flac" };
@@ -99,5 +109,29 @@ describe("PostCreationStudio Spotify fetch", () => {
     }));
 
     expect(await screen.findByRole("button", { name: "Fetch Failed Song" })).toBeEnabled();
+  });
+
+  it("emits accepted and immediate failure toasts when publishing a post", async () => {
+    const onPublished = vi.fn();
+    const onClose = vi.fn();
+    apiSend.mockResolvedValueOnce({ postId: "post-1", message: "Post is being reviewed" });
+    const { unmount } = renderStudio({ onPublished, onClose });
+    await screen.findByRole("button", { name: /photo\.jpg/i });
+    fireEvent.click(screen.getByRole("button", { name: "Go to step 4" }));
+    fireEvent.click(screen.getByRole("button", { name: "Publish" }));
+
+    await waitFor(() => expect(onPublished).toHaveBeenCalledOnce());
+    expect(toastMessages).toContain("Post is being reviewed");
+    expect(onClose).toHaveBeenCalledOnce();
+    unmount();
+
+    toastMessages = [];
+    apiSend.mockRejectedValueOnce(new Error("Backend unavailable"));
+    renderStudio();
+    await screen.findByRole("button", { name: /photo\.jpg/i });
+    fireEvent.click(screen.getByRole("button", { name: "Go to step 4" }));
+    fireEvent.click(screen.getByRole("button", { name: "Publish" }));
+
+    await waitFor(() => expect(toastMessages).toContain("Backend unavailable"));
   });
 });

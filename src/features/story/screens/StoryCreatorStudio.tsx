@@ -31,6 +31,7 @@ import {
   type MusicFetchResult,
   useMusicSegmentPreview,
 } from "../../../shared/music";
+import { emitAppToast } from "../../../shared/notifications/appToast";
 import { useBodyScrollLock } from "../../../shared/overlays/useBodyScrollLock";
 import { createStoryPublicationId, storyPublicationFields } from "./storyPublication";
 
@@ -165,8 +166,6 @@ async function composeImageStoryFile(draft: StoryDraft): Promise<File> {
       if (previewingId === trackId) stopMusicPreview();
       if (detail.kind === "success") {
         setMusicResults((current) => current.map((music) => music.id === trackId ? detail.music : music));
-      } else {
-        window.dispatchEvent(new CustomEvent("app-toast", { detail: detail.message }));
       }
     };
     window.addEventListener(MUSIC_FETCH_RESULT_EVENT, handleMusicFetchResult);
@@ -178,13 +177,14 @@ async function composeImageStoryFile(draft: StoryDraft): Promise<File> {
     setFetchingTrackIds((current) => new Set(current).add(music.id));
     try {
       await requestMusicFetch(music.id);
+      emitAppToast(`Đang tải bài hát ${music.displayName}...`);
     } catch {
       setFetchingTrackIds((current) => {
         const next = new Set(current);
         next.delete(music.id);
         return next;
       });
-      window.dispatchEvent(new CustomEvent("app-toast", { detail: "Không thể bắt đầu tải bài hát." }));
+      emitAppToast("Không thể bắt đầu tải bài hát.");
     }
   }
 
@@ -420,6 +420,7 @@ async function composeImageStoryFile(draft: StoryDraft): Promise<File> {
     setPublishing(true);
     setNotice("");
     let failed = 0;
+    let failureMessage = "";
     const publicationId = publicationIdRef.current ?? createStoryPublicationId();
     publicationIdRef.current = publicationId;
     for (const [draftIndex, draft] of drafts.entries()) {
@@ -442,6 +443,7 @@ async function composeImageStoryFile(draft: StoryDraft): Promise<File> {
         patchDraft(draft.id, { status: "published" });
       } catch (error) {
         failed += 1;
+        failureMessage ||= error instanceof Error ? error.message : "Không thể đăng Story.";
         patchDraft(draft.id, {
           status: "failed",
           error: error instanceof Error ? error.message : "Không thể đăng Story.",
@@ -450,11 +452,17 @@ async function composeImageStoryFile(draft: StoryDraft): Promise<File> {
     }
     setPublishing(false);
     if (failed > 0) {
-      setNotice(`${failed} Story chưa đăng được. Các Story còn lại đã được giữ nguyên.`);
+      const notice = `${failed} Story chưa đăng được. Các Story còn lại đã được giữ nguyên.`;
+      setNotice(notice);
+      emitAppToast(failureMessage || notice);
       return;
     }
-    await onPublished();
-    window.dispatchEvent(new CustomEvent("app-toast", { detail: "Story đang được xử lý và sẽ sớm hiển thị." }));
+    emitAppToast("Story đang được xử lý và sẽ sớm hiển thị.");
+    try {
+      await onPublished();
+    } catch {
+      // Submission was already accepted; a later SSE event remains authoritative.
+    }
     onClose();
   }
 

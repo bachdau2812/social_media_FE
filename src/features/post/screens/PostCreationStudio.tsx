@@ -12,6 +12,7 @@ import {
   type MusicFetchResult,
   useMusicSegmentPreview,
 } from "../../../shared/music";
+import { emitAppToast } from "../../../shared/notifications/appToast";
 import { useBodyScrollLock } from "../../../shared/overlays/useBodyScrollLock";
 import { DEFAULT_POST_MEDIA_RATIO, POST_MEDIA_RATIOS, postMediaRatioValue, type PostMediaRatio } from "../model/postMediaRatio";
 
@@ -158,8 +159,6 @@ export function PostCreationStudio({ userId, onBack, onClose, onDraftSaved, onPu
       if (previewingId === trackId) stopMusicPreview();
       if (detail.kind === "success") {
         setTracks((current) => current.map((track) => track.id === trackId ? detail.music : track));
-      } else {
-        window.dispatchEvent(new CustomEvent("app-toast", { detail: detail.message }));
       }
     };
     window.addEventListener(MUSIC_FETCH_RESULT_EVENT, handleMusicFetchResult);
@@ -171,13 +170,14 @@ export function PostCreationStudio({ userId, onBack, onClose, onDraftSaved, onPu
     setFetchingTrackIds((current) => new Set(current).add(track.id));
     try {
       await requestMusicFetch(track.id);
+      emitAppToast(`Đang tải bài hát ${track.displayName}...`);
     } catch {
       setFetchingTrackIds((current) => {
         const next = new Set(current);
         next.delete(track.id);
         return next;
       });
-      window.dispatchEvent(new CustomEvent("app-toast", { detail: "Không thể bắt đầu tải bài hát." }));
+      emitAppToast("Không thể bắt đầu tải bài hát.");
     }
   }
 
@@ -464,12 +464,14 @@ export function PostCreationStudio({ userId, onBack, onClose, onDraftSaved, onPu
       });
       setStatus("success");
       stopPreview();
-      window.dispatchEvent(new CustomEvent("app-toast", { detail: response.message || "Bài viết mất một chút thời gian để tải lên, vui lòng đợi" }));
+      emitAppToast(response.message || "Bài viết đang được xử lý và sẽ sớm hiển thị.");
       onPublished();
       onClose();
     } catch (error) {
       setStatus("failure");
-      setFileError(error instanceof Error ? error.message : "Publish failed");
+      const message = error instanceof Error ? error.message : "Không thể đăng bài viết.";
+      setFileError(message);
+      emitAppToast(message);
     }
   }
 

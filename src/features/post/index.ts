@@ -6,4 +6,4 @@ export * from "./model/post.dto";
 export * from "./model/post.mapper";
 export type * from "./model/post.types";
 export { PostCard, PostDetail } from "./components/PostSurfaces";
-export { usePostEventStream, type PostUploadEvent } from "./hooks/usePostEventStream";
+export { usePostEventStream, type ContentUploadResult, type PostUploadEvent } from "./hooks/usePostEventStream";
