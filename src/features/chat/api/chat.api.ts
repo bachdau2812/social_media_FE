@@ -22,7 +22,7 @@ export const chatApi = {
   direct(actorId: string, targetUserId: string) {
     return apiSend<ConversationDto>(`/chat/conversations/direct?actorId=${encodeURIComponent(actorId)}`, "POST", { targetUserId });
   },
-  group(actorId: string, title: string, memberIds: string[]) {
-    return apiSend<ConversationDto>(`/chat/conversations/group?actorId=${encodeURIComponent(actorId)}`, "POST", { title, memberIds });
+  group(actorId: string, title: string, initialUserIds: string[]) {
+    return apiSend<ConversationDto>(`/chat/conversations/group?actorId=${encodeURIComponent(actorId)}`, "POST", { title, initialUserIds });
   },
 };
