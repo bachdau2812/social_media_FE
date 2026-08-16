@@ -6,4 +6,4 @@ docs/
 logs/
 public/
 firebase-messaging-sw.js
-.env.example
+.env.development
