@@ -62,6 +62,13 @@
 
 .new-chat-dialog > header button:hover { background: #f0f0ed; }
 
+.new-chat-recipient-step {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+}
+
 .new-chat-recipient-field {
   min-height: 58px;
   display: grid;
@@ -232,19 +239,38 @@
   background: #f6eeee;
 }
 
+.new-chat-error button {
+  margin-left: 8px;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  font-weight: 750;
+  text-decoration: underline;
+  background: transparent;
+}
+
 .new-chat-dialog > footer {
+  display: flex;
+  gap: 8px;
   padding: 12px 16px;
   border-top: 1px solid #e5e5e1;
 }
 
 .new-chat-dialog > footer > button {
-  width: 100%;
+  flex: 1;
+  width: auto;
   min-height: 44px;
   border: 0;
   border-radius: 9px;
   color: #fff;
   font-weight: 780;
   background: #1a1a18;
+}
+
+.new-chat-dialog > footer > button.secondary {
+  border: 1px solid #d8d8d3;
+  color: #292925;
+  background: #fff;
 }
 
 .new-chat-dialog > footer > button:disabled {
@@ -2624,6 +2650,7 @@
 .new-group-members article { display: flex; align-items: center; gap: 11px; min-height: 58px; }
 .new-group-members article > span:last-child { display: grid; min-width: 0; }
 .new-group-members small { color: #777771; }
+.new-chat-create-error { margin: 18px 0 0; color: #943b3b; font-size: 0.8rem; text-align: center; }
 .conversation-details-actions > button { display: flex; align-items: center; gap: 10px; }
 .group-member-manager,
 .group-request-list,
