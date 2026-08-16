@@ -13,7 +13,7 @@ import { CreateContentMenu } from "./components/CreateContentMenu";
 import { consumePendingNotificationDestination, decodeNotificationDeepLink, savePendingNotificationDestination, subscribeToNotificationNavigation, type AppDestination } from "../features/notification";
 import { StoryCreatorStudio, StoryViewer, orderStoryQueue, persistSeenStoryIds, readSeenStoryIds, storyApi, storyStartIndex, type StoryHighlightDto } from "../features/story";
 import { PostCreationStudio, PostDetail, PostEditDialog } from "../features/post";
-import { setFeedMusicSuspended } from "../features/post/model/feedMusicCoordinator";
+import { useFeedMediaSuspension } from "../features/post/hooks/useFeedMediaSuspension";
 import { SuggestedFriendsPanel } from "../features/suggestions";
 import type { ContentDraft } from "../features/library";
 import { BootScreen, LoginScreen } from "../features/auth";
@@ -196,9 +196,10 @@ export default function SocialApplication() {
         window.addEventListener("app-toast", handleToast);
         return () => window.removeEventListener("app-toast", handleToast);
     }, []);
-    useEffect(() => {
-        setFeedMusicSuspended(Boolean(selectedPost));
-    }, [selectedPost]);
+    useFeedMediaSuspension({
+        postDetailOpen: Boolean(selectedPost),
+        storyCreatorOpen,
+    });
     usePostEventStream(session?.userId, (data) => {
         showAppToast(data.message || (data.result === "FAILED" ? "Không thể đăng tải bài viết" : "Bài viết đã được cập nhật"));
         if (data.result !== "FAILED" && session)
