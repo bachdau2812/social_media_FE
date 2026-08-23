@@ -9,6 +9,7 @@ function controller() {
     replyTo: null,
     sending: false,
     active: { isDissolved: false },
+    sendError: null as string | null,
     draft: "",
     setDraft: vi.fn(),
     setReplyTo: vi.fn(),
@@ -48,5 +49,17 @@ describe("ChatComposer layout parity", () => {
     expect(within(row as HTMLElement).getByRole("button", { name: "Ghi âm" })).toBeInTheDocument();
     expect(within(row as HTMLElement).getByRole("button", { name: "Gửi tin nhắn" })).toBeInTheDocument();
     expect(screen.getByRole("textbox", { name: "Nội dung tin nhắn" })).toHaveAttribute("rows", "1");
+  });
+
+  it.each([
+    [false, "full"],
+    [true, "compact"],
+  ])("renders the shared send error in %s mode", (compact) => {
+    const fixture = controller();
+    fixture.sendError = "Không thể gửi tin nhắn thoại. Bản ghi vẫn được giữ lại để bạn thử lại.";
+
+    render(<ChatComposer controller={fixture as never} compact={compact as boolean} />);
+
+    expect(screen.getByRole("alert")).toHaveTextContent(fixture.sendError);
   });
 });

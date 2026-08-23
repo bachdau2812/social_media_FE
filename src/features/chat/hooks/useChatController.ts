@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { uploadCloudinaryMedia } from "../../../shared/api";
+import { ApiError, uploadCloudinaryMedia } from "../../../shared/api";
 import { chatRealtime, type ChatRealtimeEvent } from "../services/chatRealtime";
 import { useChatMediaComposer } from "./useChatMediaComposer";
 import { chatApi } from "../api/chat.api";
@@ -20,6 +20,17 @@ function statusFor(message: ChatMessage, viewerId: string, delivered: number, re
   if (message.senderId !== viewerId) return message;
   return { ...message, status: message.messageSeq <= read ? "read" : message.messageSeq <= delivered ? "delivered" : message.status || "sent" };
 }
+function formatSendError(error: unknown, hasAudio: boolean) {
+  const retrySuffix = " Bản ghi vẫn được giữ lại để bạn thử lại.";
+  if (error instanceof ApiError) {
+    const safeBackendMessage = ["validation", "permission", "unavailable"].includes(error.category)
+      ? error.backendMessage?.trim()
+      : undefined;
+    const message = safeBackendMessage || error.message;
+    return hasAudio ? `${message}${retrySuffix}` : message;
+  }
+  return hasAudio ? `Không thể gửi tin nhắn thoại.${retrySuffix}` : "Không thể gửi tin nhắn. Vui lòng thử lại.";
+}
 
 export function useChatController(userId: string, initialTarget?: ChatNavigationTarget | null) {
   const restoredTarget = useRef<ChatNavigationTarget | null>(initialTarget ?? readStoredFullChatTarget());
@@ -31,6 +42,7 @@ export function useChatController(userId: string, initialTarget?: ChatNavigation
   const [hasMore, setHasMore] = useState(false);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [sending, setSending] = useState(false);
+  const [sendError, setSendError] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
   const [focused, setFocused] = useState(false);
@@ -140,7 +152,9 @@ export function useChatController(userId: string, initialTarget?: ChatNavigation
     const text = draft.trim();
     const images = [...mediaComposer.images];
     const audio = mediaComposer.audioAttachment;
+    let audioPending = Boolean(audio);
     if (!text && !images.length && !audio) return;
+    setSendError(null);
     setSending(true);
     const reply = replyTo;
     setDraft("");
@@ -160,17 +174,20 @@ export function useChatController(userId: string, initialTarget?: ChatNavigation
         const uploaded = await uploadCloudinaryMedia(image.file);
         await sendOne("IMAGE", null, { url: uploaded.secureUrl, publicId: uploaded.publicId, mimeType: image.file.type, size: image.file.size, fileName: image.file.name, width: uploaded.width, height: uploaded.height }, index === 0 ? reply?.messageSeq : null);
         mediaComposer.updateImageState(image.id, { status: "uploading", progress: 100 });
+        mediaComposer.removeImage(image.id);
       }
       if (audio) {
         const uploaded = await uploadCloudinaryMedia(audio.file);
         await sendOne("AUDIO", null, { url: uploaded.secureUrl, publicId: uploaded.publicId, mimeType: audio.file.type, size: audio.file.size, fileName: audio.file.name, duration: audio.duration }, reply?.messageSeq);
+        mediaComposer.clearAudio();
+        audioPending = false;
       }
       if (text) await sendOne("TEXT", text, null, images.length || audio ? null : reply?.messageSeq);
       mediaComposer.clearImages();
-      mediaComposer.clearAudio();
-    } catch {
+    } catch (error) {
       setDraft(text);
       setReplyTo(reply);
+      setSendError(formatSendError(error, audioPending));
     } finally {
       setSending(false);
     }
@@ -219,5 +236,5 @@ export function useChatController(userId: string, initialTarget?: ChatNavigation
     setReplyTo(null);
   }
 
-  return { threads, active, activeId, activeMessages, threadState, messageState, hasMore, loadingOlder, sending, draft, setDraft, replyTo, setReplyTo, focused, setFocused, highlightedSeq, unread, mediaComposer, loadThreads, loadMessages, loadOlder, focusMessage, openConversation, closeConversation, send };
+  return { threads, active, activeId, activeMessages, threadState, messageState, hasMore, loadingOlder, sending, sendError, draft, setDraft, replyTo, setReplyTo, focused, setFocused, highlightedSeq, unread, mediaComposer, loadThreads, loadMessages, loadOlder, focusMessage, openConversation, closeConversation, send };
 }

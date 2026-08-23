@@ -19,6 +19,7 @@ export function ChatComposer({ controller, compact = false }: { controller: Cont
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
   const media = controller.mediaComposer;
+  const composerError = media.error || controller.sendError;
   const disabled = controller.sending || Boolean(controller.active?.isDissolved);
   const canSend = Boolean(controller.draft.trim() || media.images.length || media.audioAttachment) && !disabled && !media.recording;
 
@@ -51,7 +52,7 @@ export function ChatComposer({ controller, compact = false }: { controller: Cont
       onStopRecording={media.stopRecording}
       onRemoveAudio={media.clearAudio}
     />
-    {media.error && <p className="chat-composer-error" role="alert">{media.error}</p>}
+    {composerError && <p className="chat-composer-error" role="alert">{composerError}</p>}
     <div className={`chat-composer-actions ${compact ? "compact floating-composer-row" : "full dm-composer-box"}`}>
       <input ref={fileRef} type="file" accept="image/*" multiple hidden onChange={(event) => { media.selectImages(event.target.files); event.currentTarget.value = ""; window.requestAnimationFrame(() => textareaRef.current?.focus()); }} />
       <button type="button" onClick={() => fileRef.current?.click()} disabled={disabled || media.recording} aria-label="Đính kèm ảnh"><Paperclip size={compact ? 17 : 19} /></button>
