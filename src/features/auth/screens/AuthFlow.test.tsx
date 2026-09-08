@@ -103,10 +103,10 @@ describe("AuthFlow", () => {
     await screen.findByRole("heading", { name: "Xác minh tài khoản" });
 
     const cells = screen.getAllByRole("textbox");
-    fireEvent.paste(cells[0], { clipboardData: { getData: () => "ab12cd34" } });
+    fireEvent.paste(cells[0], { clipboardData: { getData: () => "aB12cD34" } });
     await user.click(screen.getByRole("button", { name: "Xác minh" }));
 
-    await waitFor(() => expect(verifyRegistration).toHaveBeenCalledWith("an@example.com", "AB12CD34"));
+    await waitFor(() => expect(verifyRegistration).toHaveBeenCalledWith("an@example.com", "aB12cD34"));
     expect(screen.getByRole("heading", { name: "Đăng nhập" })).toBeInTheDocument();
   });
 
@@ -123,7 +123,7 @@ describe("AuthFlow", () => {
     fireEvent.paste(cells[0], { clipboardData: { getData: () => "ab12cd34ef" } });
     await user.click(screen.getByRole("button", { name: "Xác minh" }));
 
-    await waitFor(() => expect(verifyPasswordReset).toHaveBeenCalledWith("bach@example.com", "AB12CD34EF"));
+    await waitFor(() => expect(verifyPasswordReset).toHaveBeenCalledWith("bach@example.com", "ab12cd34ef"));
     expect(screen.getByText(/mật khẩu mới đã được gửi/i)).toBeInTheDocument();
     expect(screen.queryByLabelText("Mật khẩu mới")).not.toBeInTheDocument();
   });

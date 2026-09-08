@@ -41,11 +41,11 @@ describe("auth API contract", () => {
   });
 
   it("keeps the existing registration verification request", async () => {
-    await verifyRegistration("an@example.com", "AB12CD34");
+    await verifyRegistration("an@example.com", "aB12cD34");
     expect(apiSend).toHaveBeenCalledWith(
       "/auth/user-credentials/email-verify-and-create-user",
       "POST",
-      { email: "an@example.com", code: "AB12CD34" },
+      { email: "an@example.com", code: "aB12cD34" },
     );
   });
 

@@ -11,7 +11,7 @@ type OTPInputProps = {
 };
 
 export function compactOTP(value: string, length?: number) {
-  const compact = value.toUpperCase().replace(/[^A-Z0-9]/g, "");
+  const compact = value.replace(/[^A-Za-z0-9]/g, "");
   return length === undefined ? compact : compact.slice(0, length);
 }
 
@@ -119,7 +119,7 @@ export function OTPInput({
           value={character}
           maxLength={1}
           autoComplete={index === 0 ? "one-time-code" : "off"}
-          autoCapitalize="characters"
+          autoCapitalize="none"
           autoFocus={autoFocus && index === 0}
           disabled={disabled}
           aria-label={`${ariaLabel} ${index + 1}`}

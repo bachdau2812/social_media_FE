@@ -29,17 +29,19 @@ describe("OTPInput", () => {
     expect(screen.getAllByRole("textbox")).toHaveLength(10);
   });
 
-  it("normalizes input and advances focus", () => {
+  it("preserves input case and advances focus", () => {
     const onValue = vi.fn();
     render(<Harness onValue={onValue} />);
     const cells = screen.getAllByRole("textbox");
 
     fireEvent.change(cells[0], { target: { value: "a" } });
-    expect(onValue).toHaveBeenLastCalledWith("A");
+    expect(onValue).toHaveBeenLastCalledWith("a");
+    expect(cells[0]).toHaveValue("a");
+    expect(cells[0]).toHaveAttribute("autocapitalize", "none");
     expect(cells[1]).toHaveFocus();
 
     fireEvent.change(cells[1], { target: { value: "!" } });
-    expect(onValue).toHaveBeenLastCalledWith("A");
+    expect(onValue).toHaveBeenLastCalledWith("a");
   });
 
   it("pastes a full alphanumeric code across cells", () => {
@@ -51,9 +53,9 @@ describe("OTPInput", () => {
       clipboardData: { getData: () => "a1B2c3D4" },
     });
 
-    expect(onValue).toHaveBeenLastCalledWith("A1B2C3D4");
+    expect(onValue).toHaveBeenLastCalledWith("a1B2c3D4");
     expect(cells.map((cell) => (cell as HTMLInputElement).value).join(""))
-      .toBe("A1B2C3D4");
+      .toBe("a1B2c3D4");
   });
 
   it("supports arrow navigation and backspace to the previous cell", () => {
