@@ -16,6 +16,15 @@ describe("StoryViewer", () => {
     vi.unstubAllGlobals();
   });
 
+  it("copies a directly resolvable story URL with owner and encoded story ID", () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal("navigator", { clipboard: { writeText } });
+    render(<StoryViewer stories={[story("story/one", "me")]} index={0} currentUserId="me" onClose={vi.fn()} onSelectIndex={vi.fn()} onViewed={vi.fn()} onOpenProfile={vi.fn().mockResolvedValue(undefined)} />);
+    fireEvent.click(screen.getByRole("button", { name: "More options" }));
+    fireEvent.click(screen.getByRole("button", { name: "Copy link" }));
+    expect(writeText).toHaveBeenCalledWith(`${window.location.origin}/story/me/story%2Fone`);
+  });
+
   it("keeps Add Story at the left edge before the Story items", () => {
     const items = [story("first", "u1"), story("second", "u2")];
     const { container } = render(<StoryRail userId="me" items={items} onCreate={vi.fn()} onSelect={vi.fn()} />);

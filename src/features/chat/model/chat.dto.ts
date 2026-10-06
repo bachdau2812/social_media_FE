@@ -1,3 +1,5 @@
+import type { MessageReactionFields, ReactionType } from "./chatReactions";
+
 export type ConversationType = "DIRECT" | "GROUP";
 export type ChatMemberRole = "USER" | "ADMIN";
 export type ChatMessageType = "TEXT" | "IMAGE" | "VIDEO" | "FILE" | "AUDIO" | "STORY_REPLY" | "SYSTEM";
@@ -71,7 +73,8 @@ export type ChatStoryContextDto = {
   previewUrl: string | null;
 };
 
-export type ChatMessageDto = {
+export type ChatMessageDto = MessageReactionFields & {
+  forwarded?: boolean;
   id: string;
   conversationId: string;
   messageSeq: number;
@@ -91,3 +94,9 @@ export type ChatMessageDto = {
 };
 
 export type CursorPageDto<T> = { items: T[]; nextCursor: string | null; hasMore: boolean };
+export type PinCollectionDto = { version: number; canManage: boolean; items: { message: ChatMessageDto; pinnedBy: string; pinnedAt: string }[] };
+
+export type MessageReactorDto = {
+  userId: string; displayName: string; avatarUrl: string | null;
+  reaction: ReactionType; reactedAt: string;
+};

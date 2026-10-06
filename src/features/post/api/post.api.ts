@@ -1,7 +1,10 @@
-import { apiGet, apiSend } from "../../../shared/api";
-import type { PostDetailsDto, PostUpdateRequest } from "../model/post.dto";
+import { apiGet, apiSend, type ApiRequestOptions } from "../../../shared/api";
+import type { PostDetailsDto, PostInteractionAcceptedResponse, PostInteractionRequest, PostUpdateRequest } from "../model/post.dto";
 
 export const postApi = {
+  recordInteraction(request: PostInteractionRequest, options: ApiRequestOptions = {}) {
+    return apiSend<PostInteractionAcceptedResponse>("/posts/interaction", "POST", request, options);
+  },
   getDetail(postId: string, viewerId?: string) {
     const query = viewerId ? `?viewerId=${encodeURIComponent(viewerId)}` : "";
     return apiGet<PostDetailsDto>(`/posts/${encodeURIComponent(postId)}${query}`);

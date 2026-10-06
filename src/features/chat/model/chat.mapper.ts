@@ -19,6 +19,7 @@ export function conversationToThread(item: ConversationDto, viewerId: string): C
     unreadCount: item.unreadCount,
     preview: item.lastMessageSenderId === viewerId ? `Bạn: ${preview}` : preview,
     lastMessageId: item.lastMessageId,
+    lastMessageSeq: item.lastMessageSeq,
     lastMessageAt: item.lastMessageAt,
     currentUserRole: item.currentUserRole,
     createdAt: item.createdAt,

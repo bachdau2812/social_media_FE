@@ -1,4 +1,4 @@
-import { act, renderHook, waitFor } from "@testing-library/react";
+import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "../../../shared/api";
 import type { ChatMessageDto, ConversationDto, CursorPageDto } from "../model/chat.dto";
@@ -8,7 +8,10 @@ import { useChatController } from "./useChatController";
 
 const uploadCloudinaryMedia = vi.hoisted(() => vi.fn());
 const chatApi = vi.hoisted(() => ({
+  pins: vi.fn().mockResolvedValue({ version: 0, canManage: false, items: [] }),
+  messageStates: vi.fn(),
   conversations: vi.fn(),
+  conversation: vi.fn(),
   messages: vi.fn(),
   details: vi.fn(),
   send: vi.fn(),
@@ -17,6 +20,7 @@ const chatApi = vi.hoisted(() => ({
 const chatRealtime = vi.hoisted(() => ({
   rememberRecipientCursor: vi.fn(),
   subscribe: vi.fn<(userId: string, listener: (event: ChatRealtimeEvent) => void) => () => void>(() => vi.fn()),
+  subscribeReconnect: vi.fn<(listener: () => void) => () => void>(() => vi.fn()),
   acknowledgeDelivered: vi.fn(),
   acknowledgeRead: vi.fn(),
   outgoingStatus: vi.fn(() => "sent"),
@@ -100,10 +104,14 @@ function messagePage(conversationId: string): CursorPageDto<ChatMessageDto> {
 
 beforeEach(() => {
   chatApi.conversations.mockReset();
+  chatApi.conversation.mockReset();
   chatApi.messages.mockReset();
   chatApi.details.mockReset();
   chatApi.send.mockReset();
+  chatApi.messageStates.mockReset();
+  chatRealtime.publishLocalMessage.mockClear();
   chatRealtime.subscribe.mockClear();
+  chatRealtime.subscribeReconnect.mockClear();
   uploadCloudinaryMedia.mockReset();
   mediaComposer.images = [];
   mediaComposer.audioAttachment = null;
@@ -121,9 +129,360 @@ beforeEach(() => {
   });
 });
 
-afterEach(() => { sessionStorage.clear(); });
+afterEach(async () => { cleanup(); await Promise.resolve(); sessionStorage.clear(); });
 
 describe("useChatController message requests", () => {
+  function emit(event: ChatRealtimeEvent) {
+    const calls = chatRealtime.subscribe.mock.calls;
+    act(() => calls[calls.length - 1]?.[1](event));
+  }
+  function membership(type: "MEMBER_REMOVED" | "MEMBER_ADDED", conversationId = "a"): ChatRealtimeEvent {
+    return { type, eventId: type, conversationId, actorId: "admin", targetUserId: "viewer-1", recipientIds: ["viewer-1"] };
+  }
+  it("purges removed history and ignores creations until a fresh rejoined snapshot arrives", async () => {
+    chatApi.conversations.mockResolvedValue({ items: [thread("a")] });
+    chatApi.messages.mockResolvedValue(messagePage("a"));
+    const { result } = renderHook(() => useChatController("viewer-1", { conversationId: "a" }));
+    await waitFor(() => expect(result.current.activeMessages).toHaveLength(1));
+    emit(membership("MEMBER_REMOVED"));
+    emit({ type: "MESSAGE_CREATED", eventId: "late", conversationId: "a", actorId: "other", recipientIds: ["viewer-1"], message: { ...messagePage("a").items[0], clientMessageId: undefined, id: "inaccessible", messageSeq: 2 } });
+    const fresh = deferred<CursorPageDto<ChatMessageDto>>();
+    chatApi.messages.mockReturnValue(fresh.promise);
+    emit(membership("MEMBER_ADDED"));
+    await waitFor(() => expect(result.current.threads).toHaveLength(1));
+    act(() => result.current.openConversation("a"));
+    await waitFor(() => expect(result.current.messageState).toBe("loading"));
+    expect(result.current.activeMessages).toEqual([]);
+    await act(async () => fresh.resolve({ items: [], hasMore: false, nextCursor: null }));
+    expect(result.current.activeMessages).toEqual([]);
+  });
+  it.each(["older", "focus"] as const)("ignores a late %s page after removal and re-addition", async (kind) => {
+    const initial = messagePage("a"); initial.hasMore = true; initial.items[0].messageSeq = 10;
+    const oldPage = deferred<CursorPageDto<ChatMessageDto>>();
+    chatApi.conversations.mockResolvedValue({ items: [thread("a")] });
+    chatApi.messages.mockResolvedValueOnce(initial).mockReturnValueOnce(oldPage.promise).mockResolvedValue({ items: [], hasMore: false, nextCursor: null });
+    const { result } = renderHook(() => useChatController("viewer-1", { conversationId: "a" }));
+    await waitFor(() => expect(result.current.messageState).toBe("ready"));
+    let pending!: Promise<void>;
+    act(() => { pending = kind === "older" ? result.current.loadOlder() : result.current.focusMessage(1); });
+    emit(membership("MEMBER_REMOVED")); emit(membership("MEMBER_ADDED"));
+    await waitFor(() => expect(result.current.threads).toHaveLength(1));
+    act(() => result.current.openConversation("a"));
+    await waitFor(() => expect(result.current.messageState).toBe("ready"));
+    await act(async () => { oldPage.resolve(messagePage("a")); await pending; });
+    expect(result.current.activeMessages).toEqual([]);
+    expect(result.current.highlightedSeq).toBeNull();
+    expect(result.current.hasMore).toBe(false);
+  });
+  it("rejects a thread-list snapshot requested before membership removal", async () => {
+    const pending = deferred<CursorPageDto<ConversationDto>>();
+    chatApi.conversations.mockResolvedValueOnce({ items: [thread("a")] }).mockReturnValue(pending.promise);
+    const { result } = renderHook(() => useChatController("viewer-1", null));
+    await waitFor(() => expect(result.current.threadState).toBe("ready"));
+    let request!: Promise<void>;
+    act(() => { request = result.current.loadThreads(); });
+    emit(membership("MEMBER_REMOVED"));
+    await act(async () => { pending.resolve({ items: [thread("a")], hasMore: false, nextCursor: null }); await request; });
+    expect(result.current.threads).toEqual([]);
+  });
+  it.each(["older", "focus"] as const)("ignores a late %s request rejection after membership removal", async (kind) => {
+    const initial = messagePage("a"); initial.hasMore = true; initial.items[0].messageSeq = 10;
+    const page = deferred<CursorPageDto<ChatMessageDto>>();
+    chatApi.conversations.mockResolvedValue({ items: [thread("a")] });
+    chatApi.messages.mockResolvedValueOnce(initial).mockReturnValueOnce(page.promise);
+    const { result } = renderHook(() => useChatController("viewer-1", { conversationId: "a" }));
+    await waitFor(() => expect(result.current.messageState).toBe("ready"));
+    let outcome!: Promise<string>;
+    act(() => { outcome = (kind === "older" ? result.current.loadOlder() : result.current.focusMessage(1)).then(() => "ignored", () => "rejected"); });
+    emit(membership("MEMBER_REMOVED"));
+    let status!: string;
+    await act(async () => { page.reject(new Error("late membership failure")); status = await outcome; });
+    expect(status).toBe("ignored");
+    expect(result.current.loadingOlder).toBe(false);
+  });
+  it("keeps a newly created summary when an earlier thread request finishes afterward", async () => {
+    const original = { ...thread("a"), lastMessageSeq: 10, lastMessageId: "previous", lastMessagePreview: "previous body", unreadCount: 4 };
+    const page = deferred<CursorPageDto<ConversationDto>>();
+    chatApi.conversations.mockResolvedValueOnce({ items: [original] }).mockReturnValueOnce(page.promise);
+    const { result } = renderHook(() => useChatController("viewer-1", null));
+    await waitFor(() => expect(result.current.threadState).toBe("ready"));
+    let request!: Promise<void>;
+    act(() => { request = result.current.loadThreads(); });
+    emit({ type: "MESSAGE_CREATED", eventId: "new", conversationId: "a", actorId: "other", recipientIds: ["viewer-1"], message: { ...messagePage("a").items[0], clientMessageId: undefined, id: "latest", messageSeq: 11, content: "latest body" } });
+    await act(async () => { page.resolve({ items: [original], hasMore: false, nextCursor: null }); await request; });
+    expect(result.current.threads[0]).toMatchObject({ lastMessageId: "latest", lastMessageSeq: 11, preview: "latest body", unreadCount: 5 });
+  });
+  it("retains a creation accepted while a stale history snapshot was in flight", async () => {
+    const page = deferred<CursorPageDto<ChatMessageDto>>();
+    const initial = messagePage("a"); initial.items[0].messageSeq = 5;
+    chatApi.conversations.mockResolvedValue({ items: [{ ...thread("a"), lastMessageSeq: 5 }] });
+    chatApi.messages.mockReturnValue(page.promise);
+    const { result } = renderHook(() => useChatController("viewer-1", { conversationId: "a" }));
+    await waitFor(() => expect(result.current.threadState).toBe("ready"));
+    emit({ type: "MESSAGE_CREATED", eventId: "new", conversationId: "a", actorId: "other", recipientIds: ["viewer-1"], message: { ...initial.items[0], clientMessageId: undefined, id: "new", messageSeq: 6 } });
+    await act(async () => page.resolve(initial));
+    expect(result.current.activeMessages.map((item) => item.messageSeq)).toEqual([5, 6]);
+  });
+  it("fills a missing out-of-order creation without changing the newest summary or read cursor", async () => {
+    const initial = messagePage("a"); initial.items[0].messageSeq = 5;
+    chatApi.conversations.mockResolvedValue({ items: [{ ...thread("a"), lastMessageSeq: 5 }] });
+    chatApi.messages.mockResolvedValue(initial);
+    const { result } = renderHook(() => useChatController("viewer-1", { conversationId: "a" }));
+    await waitFor(() => expect(result.current.messageState).toBe("ready"));
+    act(() => result.current.setFocused(true));
+    emit({ type: "MESSAGE_CREATED", eventId: "seven", conversationId: "a", actorId: "other", recipientIds: ["viewer-1"], message: { ...initial.items[0], clientMessageId: undefined, id: "seven", messageSeq: 7, content: "newest" } });
+    const before = result.current.threads, read = chatRealtime.acknowledgeRead.mock.calls.length;
+    emit({ type: "MESSAGE_CREATED", eventId: "six", conversationId: "a", actorId: "other", recipientIds: ["viewer-1"], message: { ...initial.items[0], clientMessageId: undefined, id: "six", messageSeq: 6, content: "middle" } });
+    expect(result.current.activeMessages.map((item) => item.messageSeq)).toEqual([5, 6, 7]);
+    expect(result.current.threads).toEqual(before);
+    expect(chatRealtime.acknowledgeRead).toHaveBeenCalledTimes(read);
+  });
+  it("does not insert pre-rejoin creation replays below the fresh server snapshot boundary", async () => {
+    chatApi.conversations.mockResolvedValue({ items: [{ ...thread("a"), lastMessageSeq: 10 }] });
+    chatApi.messages.mockResolvedValue({ items: [], hasMore: false });
+    const { result } = renderHook(() => useChatController("viewer-1", { conversationId: "a" }));
+    await waitFor(() => expect(result.current.messageState).toBe("ready"));
+    emit(membership("MEMBER_REMOVED")); emit(membership("MEMBER_ADDED"));
+    await waitFor(() => expect(result.current.threads).toHaveLength(1));
+    act(() => result.current.openConversation("a"));
+    await waitFor(() => expect(result.current.messageState).toBe("ready"));
+    emit({ type: "MESSAGE_CREATED", eventId: "old", conversationId: "a", actorId: "other", recipientIds: ["viewer-1"], message: { ...messagePage("a").items[0], clientMessageId: undefined, messageSeq: 2 } });
+    expect(result.current.activeMessages).toEqual([]);
+  });
+  it("refreshes an inactive recalled preview on reconnect while retaining active selection", async () => {
+    const hidden = { ...thread("hidden"), lastMessageSeq: 5, lastMessageId: "private", lastMessagePreview: "private preview", unreadCount: 3 };
+    chatApi.conversations.mockResolvedValueOnce({ items: [thread("a"), hidden] }).mockResolvedValueOnce({ items: [thread("a"), { ...hidden, lastMessagePreview: "Recalled" }] });
+    chatApi.messages.mockResolvedValue(messagePage("a"));
+    const { result } = renderHook(() => useChatController("viewer-1", { conversationId: "a" }));
+    await waitFor(() => expect(result.current.messageState).toBe("ready"));
+    const listeners = chatRealtime.subscribeReconnect.mock.calls;
+    act(() => listeners.forEach(([listener]) => listener()));
+    await waitFor(() => expect(result.current.threads.find((item) => item.id === "hidden")?.preview).toBe("Recalled"));
+    expect(result.current.activeId).toBe("a");
+    expect(result.current.unread).toBe(3);
+  });
+  it("rejects a late conversation lookup across removal and re-addition", async () => {
+    const lookup = deferred<ConversationDto>();
+    const rejoined = deferred<CursorPageDto<ConversationDto>>();
+    chatApi.conversations.mockResolvedValueOnce({ items: [] }).mockReturnValue(rejoined.promise);
+    chatApi.conversation.mockReturnValue(lookup.promise);
+    chatApi.messages.mockResolvedValue({ items: [], hasMore: false });
+    const { result } = renderHook(() => useChatController("viewer-1", { conversationId: "a" }));
+    await waitFor(() => expect(chatApi.conversation).toHaveBeenCalled());
+    emit(membership("MEMBER_REMOVED")); emit(membership("MEMBER_ADDED"));
+    await act(async () => lookup.resolve(thread("a")));
+    expect(result.current.threads).toEqual([]);
+    await act(async () => rejoined.resolve({ items: [], hasMore: false, nextCursor: null }));
+  });
+  it("drops recipients resolved under a removed membership before submitting a send", async () => {
+    const details = deferred<{ members: { userId: string }[] }>();
+    chatApi.conversations.mockResolvedValue({ items: [thread("a")] });
+    chatApi.messages.mockResolvedValue(messagePage("a"));
+    chatApi.details.mockReturnValue(details.promise);
+    chatApi.send.mockResolvedValue({ ...messagePage("a").items[0], senderId: "viewer-1" });
+    const { result } = renderHook(() => useChatController("viewer-1", { conversationId: "a" }));
+    await waitFor(() => expect(result.current.messageState).toBe("ready"));
+    act(() => result.current.setDraft("before removal"));
+    let sending!: Promise<void>;
+    act(() => { sending = result.current.send(); });
+    emit(membership("MEMBER_REMOVED"));
+    await act(async () => { details.resolve({ members: [{ userId: "other" }] }); await sending; });
+    expect(chatApi.send).not.toHaveBeenCalled();
+    expect(result.current.replyTo).toBeNull();
+  });
+  it("does not publish an old account's accepted send after its controller unmounts", async () => {
+    const sent = deferred<ChatMessageDto>();
+    chatApi.conversations.mockResolvedValue({ items: [thread("a")] });
+    chatApi.messages.mockResolvedValue(messagePage("a"));
+    chatApi.details.mockResolvedValue({ members: [{ userId: "other" }] });
+    chatApi.send.mockReturnValue(sent.promise);
+    const { result, unmount } = renderHook(() => useChatController("old-user", { conversationId: "a" }));
+    await waitFor(() => expect(result.current.messageState).toBe("ready"));
+    act(() => result.current.setDraft("old private draft"));
+    let request!: Promise<void>;
+    act(() => { request = result.current.send(); });
+    await waitFor(() => expect(chatApi.send).toHaveBeenCalled());
+    unmount();
+    await act(async () => { sent.resolve({ ...messagePage("a").items[0], senderId: "old-user", content: "old private draft" }); await request; });
+    expect(chatRealtime.publishLocalMessage).not.toHaveBeenCalled();
+  });
+  it("does not submit a send when its recipient lookup resolves after unmount", async () => {
+    const details = deferred<{ members: { userId: string }[] }>();
+    chatApi.conversations.mockResolvedValue({ items: [thread("a")] });
+    chatApi.messages.mockResolvedValue(messagePage("a"));
+    chatApi.details.mockReturnValue(details.promise);
+    const { result, unmount } = renderHook(() => useChatController("old-user", { conversationId: "a" }));
+    await waitFor(() => expect(result.current.messageState).toBe("ready"));
+    act(() => result.current.setDraft("old private draft"));
+    let request!: Promise<void>;
+    act(() => { request = result.current.send(); });
+    unmount();
+    await act(async () => { details.resolve({ members: [{ userId: "other" }] }); await request; });
+    expect(chatApi.send).not.toHaveBeenCalled();
+  });
+  it("clears an old composer quote when reconnect learns recall only through a newer reply", async () => {
+    const source = messagePage("a").items[0];
+    const reply = { ...source, id: "reply", messageSeq: 100, content: "reply body", reply: { messageSeq: 1, senderId: "other", senderDisplayName: "Other", messageType: "TEXT" as const, content: "source quote", metadata: null, deleted: false } };
+    chatApi.conversations.mockResolvedValue({ items: [thread("a")] });
+    chatApi.messages.mockResolvedValueOnce({ items: [source], hasMore: true }).mockResolvedValueOnce({ items: [reply], hasMore: true });
+    chatApi.messageStates.mockResolvedValue([{ ...reply, reply: { ...reply.reply, deleted: true, content: null } }]);
+    const { result } = renderHook(() => useChatController("viewer-1", { conversationId: "a" }));
+    await waitFor(() => expect(result.current.messageState).toBe("ready"));
+    act(() => result.current.setReplyTo(result.current.activeMessages[0]));
+    await act(async () => result.current.loadMessages("a"));
+    expect(result.current.replyTo?.id).toBe(source.id);
+    const reconnects = chatRealtime.subscribeReconnect.mock.calls;
+    await act(async () => reconnects.forEach(([listener]) => listener()));
+    await waitFor(() => expect(result.current.replyTo).toBeNull());
+  });
+  it("refetches recipients after membership re-addition rather than using the old member list", async () => {
+    chatApi.conversations.mockResolvedValue({ items: [thread("a")] });
+    chatApi.messages.mockResolvedValue(messagePage("a"));
+    chatApi.details.mockResolvedValueOnce({ members: [{ userId: "old-member" }] }).mockResolvedValueOnce({ members: [{ userId: "new-member" }] });
+    chatApi.send.mockResolvedValue({ ...messagePage("a").items[0], id: "sent", messageSeq: 2, senderId: "viewer-1" });
+    const { result } = renderHook(() => useChatController("viewer-1", { conversationId: "a" }));
+    await waitFor(() => expect(result.current.messageState).toBe("ready"));
+    act(() => result.current.setDraft("first"));
+    await act(async () => result.current.send());
+    emit(membership("MEMBER_REMOVED")); emit(membership("MEMBER_ADDED"));
+    await waitFor(() => expect(result.current.threads).toHaveLength(1));
+    act(() => result.current.openConversation("a"));
+    await waitFor(() => expect(result.current.messageState).toBe("ready"));
+    act(() => result.current.setDraft("second"));
+    await act(async () => result.current.send());
+    expect(chatApi.details).toHaveBeenCalledTimes(2);
+    expect(chatApi.send.mock.calls[1][2].recipientId).toBe("new-member");
+  });
+  it("keeps unread, order and summary unchanged for an older recalled creation replay", async () => {
+    const current = { ...thread("a"), lastMessageSeq: 10, lastMessageId: "latest", lastMessagePreview: "latest body", lastMessageAt: "2026-08-01T00:00:00Z", unreadCount: 4 };
+    chatApi.conversations.mockResolvedValue({ items: [thread("b"), current] });
+    const { result } = renderHook(() => useChatController("viewer-1", null));
+    await waitFor(() => expect(result.current.threadState).toBe("ready"));
+    const before = result.current.threads;
+    const recalled = { ...messagePage("a").items[0], clientMessageId: undefined, id: "old", messageSeq: 2, deleted: true, content: null };
+    emit({ type: "MESSAGE_CREATED", eventId: "old-replay", conversationId: "a", actorId: "other", recipientIds: ["viewer-1"], message: recalled });
+    expect(result.current.threads).toEqual(before);
+    expect(result.current.unread).toBe(4);
+  });
+  it("refetches the server summary when a recalled creation's sequence was never observed", async () => {
+    const recalled = { ...thread("a"), lastMessageSeq: 1, lastMessageId: "recalled", lastMessagePreview: "Recalled", unreadCount: 1 };
+    chatApi.conversations.mockResolvedValueOnce({ items: [thread("a")] }).mockResolvedValueOnce({ items: [recalled] });
+    const { result } = renderHook(() => useChatController("viewer-1", null));
+    await waitFor(() => expect(result.current.threadState).toBe("ready"));
+    const delivered = chatRealtime.acknowledgeDelivered.mock.calls.length, read = chatRealtime.acknowledgeRead.mock.calls.length;
+    emit({ type: "MESSAGE_DELETED", eventId: "recalled-creation", conversationId: "a", actorId: "other", recipientIds: ["viewer-1"], message: { ...messagePage("a").items[0], clientMessageId: undefined, id: "recalled", deleted: true, content: null } });
+    await waitFor(() => expect(result.current.threads[0]?.preview).toBe("Recalled"));
+    expect(result.current.unread).toBe(1);
+    expect(chatRealtime.acknowledgeDelivered).toHaveBeenCalledTimes(delivered);
+    expect(chatRealtime.acknowledgeRead).toHaveBeenCalledTimes(read);
+    emit({ type: "MESSAGE_DELETED", eventId: "known-recall", conversationId: "a", actorId: "other", recipientIds: ["viewer-1"], message: { ...messagePage("a").items[0], clientMessageId: undefined, id: "recalled", deleted: true, content: null } });
+    expect(chatApi.conversations).toHaveBeenCalledTimes(2);
+  });
+  it("counts one newly created message once when local/realtime duplicates share a batch", async () => {
+    chatApi.conversations.mockResolvedValue({ items: [{ ...thread("a"), lastMessageSeq: 1, lastMessageId: "previous" }] });
+    const { result } = renderHook(() => useChatController("viewer-1", null));
+    await waitFor(() => expect(result.current.threadState).toBe("ready"));
+    const calls = chatRealtime.subscribe.mock.calls;
+    const listener = calls[calls.length - 1][1];
+    const event: ChatRealtimeEvent = { type: "MESSAGE_CREATED", eventId: "new", conversationId: "a", actorId: "other", recipientIds: ["viewer-1"], message: { ...messagePage("a").items[0], clientMessageId: undefined, id: "new", messageSeq: 2 } };
+    act(() => { listener(event); listener(event); });
+    expect(result.current.unread).toBe(1);
+  });
+  it("does not replace the viewer's reaction with a neutral MESSAGE_CREATED replay", async () => {
+    const page = messagePage("a");
+    page.items[0] = { ...page.items[0], reactionVersion: 5, myReaction: "HEART", isReact: true, likeCount: 1, reactions: [{ type: "HEART", count: 1 }] };
+    chatApi.conversations.mockResolvedValue({ items: [thread("a")] });
+    chatApi.messages.mockResolvedValue(page);
+    const { result } = renderHook(() => useChatController("replay-user", { conversationId: "a" }));
+    await waitFor(() => expect(result.current.activeMessages[0]?.myReaction).toBe("HEART"));
+    const calls = chatRealtime.subscribe.mock.calls;
+    const listener = calls[calls.length - 1][1];
+    act(() => listener({ type: "MESSAGE_CREATED", eventId: "replay", conversationId: "a", actorId: "other", recipientIds: ["replay-user"], message: { ...page.items[0], clientMessageId: undefined, myReaction: null, isReact: false } }));
+    expect(result.current.activeMessages[0]?.myReaction).toBe("HEART");
+  });
+  it("does not hydrate a new account from a previous viewer's messages while its request is pending", async () => {
+    const pending = deferred<CursorPageDto<ChatMessageDto>>();
+    const old = messagePage("a");
+    old.items[0] = { ...old.items[0], reactionVersion: 5, myReaction: "HEART", isReact: true, likeCount: 1, reactions: [{ type: "HEART", count: 1 }] };
+    chatApi.conversations.mockResolvedValue({ items: [thread("a")] });
+    chatApi.conversation.mockResolvedValue(thread("a"));
+    chatApi.messages.mockImplementation((_id, actorId) => actorId === "old-user" ? Promise.resolve(old) : pending.promise);
+    const { result, rerender } = renderHook(({ userId }) => useChatController(userId, { conversationId: "a" }), { initialProps: { userId: "old-user" } });
+    await waitFor(() => expect(result.current.activeMessages[0]?.myReaction).toBe("HEART"));
+    rerender({ userId: "new-user" });
+    expect(result.current.activeMessages).toEqual([]);
+    await waitFor(() => expect(chatApi.messages).toHaveBeenCalledWith("a", "new-user", 80, undefined, expect.anything()));
+    const fresh = messagePage("a");
+    fresh.items[0] = { ...fresh.items[0], reactionVersion: 5, myReaction: null, isReact: false, likeCount: 1, reactions: [{ type: "HEART", count: 1 }] };
+    await act(async () => pending.resolve(fresh));
+    expect(result.current.activeMessages[0]?.myReaction).toBeNull();
+    expect(result.current.activeMessages[0]?.isReact).toBe(false);
+  });
+  it("ignores a late focus page after the navigation target changes within the same conversation", async () => {
+    const older = deferred<CursorPageDto<ChatMessageDto>>();
+    const recent = messagePage("a");
+    recent.items[0] = { ...recent.items[0], id: "recent", messageSeq: 50 };
+    recent.hasMore = true;
+    chatApi.conversations.mockResolvedValue({ items: [thread("a")] });
+    chatApi.messages.mockResolvedValueOnce(recent).mockReturnValueOnce(older.promise);
+    const { result, rerender } = renderHook(({ messageId }) => useChatController("viewer-1", { conversationId: "a", messageId }), { initialProps: { messageId: "old" } });
+    await waitFor(() => expect(chatApi.messages).toHaveBeenCalledTimes(2));
+    rerender({ messageId: "recent" });
+    await waitFor(() => expect(result.current.highlightedSeq).toBe(50));
+    const oldPage = messagePage("a");
+    oldPage.items[0] = { ...oldPage.items[0], id: "old", messageSeq: 1 };
+    await act(async () => { older.resolve(oldPage); });
+    expect(result.current.highlightedSeq).toBe(50);
+  });
+  it("can refocus a message after its route focus parameter is removed and restored", async () => {
+    chatApi.conversations.mockResolvedValue({ items: [thread("a")] });
+    chatApi.messages.mockResolvedValue(messagePage("a"));
+    const { result, rerender } = renderHook(({ messageSeq }) => useChatController("viewer-1", { conversationId: "a", messageSeq }), { initialProps: { messageSeq: 1 as number | undefined } });
+    await waitFor(() => expect(result.current.highlightedSeq).toBe(1));
+    rerender({ messageSeq: undefined });
+    await waitFor(() => expect(result.current.highlightedSeq).toBeNull());
+    rerender({ messageSeq: 1 });
+    await waitFor(() => expect(result.current.highlightedSeq).toBe(1));
+  });
+  it("resolves a directly requested conversation outside the inbox page", async () => {
+    chatApi.conversations.mockResolvedValue({ items: [], hasMore: true });
+    chatApi.conversation.mockResolvedValue(thread("older"));
+    chatApi.messages.mockResolvedValue(messagePage("older"));
+    const { result } = renderHook(() => useChatController("viewer-1", { conversationId: "older" }));
+    await waitFor(() => expect(result.current.active?.id).toBe("older"));
+    expect(chatApi.conversation).toHaveBeenCalledWith("older", "viewer-1", expect.anything());
+  });
+  it("reports an unavailable conversation target and ignores a stale single-thread response", async () => {
+    const pending = deferred<ConversationDto>();
+    chatApi.conversations.mockResolvedValue({ items: [] });
+    chatApi.conversation.mockImplementation((id: string) => id === "a" ? pending.promise : Promise.reject(new Error("Unavailable")));
+    chatApi.messages.mockResolvedValue({ items: [], hasMore: false });
+    const { result } = renderHook(() => useChatController("viewer-1", { conversationId: "a" }));
+    await waitFor(() => expect(chatApi.conversation).toHaveBeenCalled());
+    act(() => result.current.openConversation("missing"));
+    await waitFor(() => expect(result.current.conversationState).toBe("error"));
+    await act(async () => { pending.resolve(thread("a")); });
+    expect(result.current.active).toBeNull();
+    expect(result.current.conversationState).toBe("error");
+  });
+  it("focuses an ID-only navigation target after its conversation messages load", async () => {
+    const pending = deferred<CursorPageDto<ChatMessageDto>>();
+    chatApi.conversations.mockResolvedValue({ items: [thread("a")] });
+    chatApi.messages.mockReturnValue(pending.promise);
+    const { result } = renderHook(() => useChatController("viewer-1", { conversationId: "a", messageId: "message-a" }));
+    await waitFor(() => expect(result.current.active?.id).toBe("a"));
+    expect(result.current.highlightedSeq).toBeNull();
+    await act(async () => { pending.resolve(messagePage("a")); });
+    await waitFor(() => expect(result.current.highlightedSeq).toBe(1));
+  });
+  it("treats an explicit null target as the inbox instead of restoring a stored conversation", async () => {
+    chatApi.conversations.mockResolvedValue({ items: [thread("stored")] });
+    sessionStorage.setItem("social-media-full-chat-target", JSON.stringify({ conversationId: "stored" }));
+    const { result } = renderHook(() => useChatController("viewer-1", null));
+    await waitFor(() => expect(result.current.threadState).toBe("ready"));
+    expect(result.current.activeId).toBeNull();
+    expect(chatApi.messages).not.toHaveBeenCalled();
+  });
   it("aborts the previous conversation load and ignores its late failure", async () => {
     const first = deferred<CursorPageDto<ChatMessageDto>>();
     const second = deferred<CursorPageDto<ChatMessageDto>>();

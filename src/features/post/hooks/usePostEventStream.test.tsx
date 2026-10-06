@@ -67,6 +67,27 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 describe("usePostEventStream", () => {
+  it("forwards correlated avatar results over the existing SSE connection", () => {
+    const onAvatarUploadResult = vi.fn();
+    const globalResult = vi.fn();
+    window.addEventListener("avatar-upload-result", globalResult);
+    const { unmount } = renderHook(() => usePostEventStream("user-1", {
+      onUploadResult: vi.fn(), onAvatarUploadResult,
+    }));
+    const source = EventSourceStub.instances[0];
+    const approved = { userId: "user-1", publicId: "folder/avatar", mediaUrl: "https://cdn/avatar.png", result: "APPROVED" };
+    const rejected = { ...approved, result: "REJECTED" };
+    source.emit("avatar_upload_event", JSON.stringify(approved));
+    source.emit("avatar_upload_event", JSON.stringify(rejected));
+    source.emit("avatar_upload_event", "not-json");
+    source.emit("avatar_upload_event", JSON.stringify({ result: "APPROVED" }));
+    source.emit("avatar_upload_event", JSON.stringify({ ...approved, userId: "other" }));
+    expect(onAvatarUploadResult.mock.calls.map(([event]) => event)).toEqual([approved, rejected]);
+    expect(globalResult).toHaveBeenCalledTimes(2);
+    expect(EventSourceStub.instances).toHaveLength(1);
+    unmount();
+    window.removeEventListener("avatar-upload-result", globalResult);
+  });
   it("normalizes terminal post and story upload events", () => {
     const onUploadResult = vi.fn();
     const { unmount } = renderHook(() => usePostEventStream("user-1", { onUploadResult }));

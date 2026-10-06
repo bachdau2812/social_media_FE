@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ChevronLeft, ChevronRight, GripVertical, ImagePlus, LoaderCircle, Pause, Play, RefreshCw, Trash2, X } from "lucide-react";
 import { formatVoiceDuration, type ChatImageDraft } from "../hooks/useChatMediaComposer";
+import { useForegroundOverlay } from "../../../shared/overlays/useForegroundOverlay";
 
 export type ChatDisplayMediaItem = {
   id?: string | null;
@@ -14,7 +15,7 @@ export type ChatDisplayMediaItem = {
   height?: number | null;
 };
 
-export type ChatViewerItem = { url: string; alt: string };
+export type ChatViewerItem = { url: string; alt: string; type?: "IMAGE" | "VIDEO" };
 
 export function ChatAttachmentTray({ images, disabled, onAdd, onRemove, onMove, onRetry, onClear }: {
   images: ChatImageDraft[];
@@ -92,6 +93,8 @@ function transformChatImageUrl(url: string, width: number) {
   return `${prefix}c_scale,w_${width},q_auto:good,f_auto/${source}`;
 }
 export function ChatMediaViewer({ items, initialIndex, onClose }: { items: ChatViewerItem[]; initialIndex: number; onClose: () => void }) {
+  // Shared viewer for full chat and mini-chat: covered feed posts cannot accrue dwell.
+  useForegroundOverlay(items.length > 0);
   const [index, setIndex] = useState(Math.min(Math.max(initialIndex, 0), Math.max(0, items.length - 1)));
   const touchStartRef = useRef<number | null>(null);
   useEffect(() => {
@@ -110,7 +113,7 @@ export function ChatMediaViewer({ items, initialIndex, onClose }: { items: ChatV
   }, [items.length, onClose]);
   const current = items[index];
   if (!current) return null;
-  return createPortal(<div className="chat-media-viewer" role="dialog" aria-modal="true" aria-label="Xem ảnh" onPointerDown={(event) => { if (event.target === event.currentTarget) onClose(); }} onTouchStart={(event) => { touchStartRef.current = event.touches[0]?.clientX ?? null; }} onTouchEnd={(event) => {
+  return createPortal(<div className="chat-media-viewer" role="dialog" aria-modal="true" aria-label={current.type === "VIDEO" ? "Xem video" : "Xem ảnh"} onPointerDown={(event) => { if (event.target === event.currentTarget) onClose(); }} onTouchStart={(event) => { touchStartRef.current = event.touches[0]?.clientX ?? null; }} onTouchEnd={(event) => {
     const start = touchStartRef.current;
     const end = event.changedTouches[0]?.clientX;
     touchStartRef.current = null;
@@ -119,7 +122,7 @@ export function ChatMediaViewer({ items, initialIndex, onClose }: { items: ChatV
   }}>
     <header><span>{String(index + 1).padStart(2, "0")} / {String(items.length).padStart(2, "0")}</span><button type="button" onClick={onClose} aria-label="Đóng"><X size={22} /></button></header>
     {index > 0 && <button type="button" className="chat-viewer-nav previous" onClick={() => setIndex((value) => value - 1)} aria-label="Ảnh trước"><ChevronLeft size={25} /></button>}
-    <img src={current.url} alt={current.alt} />
+    {current.type === "VIDEO" ? <video src={current.url} aria-label={current.alt} controls autoPlay playsInline /> : <img src={current.url} alt={current.alt} />}
     {index < items.length - 1 && <button type="button" className="chat-viewer-nav next" onClick={() => setIndex((value) => value + 1)} aria-label="Ảnh tiếp theo"><ChevronRight size={25} /></button>}
   </div>, document.body);
 }

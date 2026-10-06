@@ -5,6 +5,7 @@ export const routes = {
   library: "/library",
   settings: "/settings",
   chat: "/chat",
+  conversation: (conversationId: string) => `/chat/${encodeURIComponent(conversationId)}`,
   profile: (userId: string) => `/profile/${encodeURIComponent(userId)}`,
   post: (postId: string) => `/post/${encodeURIComponent(postId)}`,
   story: (ownerId: string, storyId?: string) => `/story/${encodeURIComponent(ownerId)}${storyId ? `/${encodeURIComponent(storyId)}` : ""}`,

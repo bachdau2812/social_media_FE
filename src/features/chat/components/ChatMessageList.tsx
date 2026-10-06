@@ -1,17 +1,21 @@
-import { Forward, Heart, MoreHorizontal, Pin, Reply, RotateCcw, ShieldAlert } from "lucide-react";
+import { Forward, MoreHorizontal, Pin, Reply, RotateCcw, ShieldAlert } from "lucide-react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ChatAudioPlayer, ChatImageMosaic, type ChatViewerItem } from "./ChatMediaExperience";
 import type { useChatController } from "../hooks/useChatController";
 import type { ChatMediaMetadata, ChatMessage } from "../model/chat.types";
 import { Avatar as SharedAvatar } from "../../../shared/components";
 import { StoryReplyMessage } from "./StoryReplyMessage";
+import { MessageReactionPicker, MessageReactions } from "./MessageReactions";
+import type { ReactionType } from "../model/chatReactions";
+import { canForward } from "../model/chatMessageActions";
+import { ForwardMessageDialog } from "./ForwardMessageDialog";
 
 type Controller = ReturnType<typeof useChatController>;
 type Props = {
   controller: Controller;
   userId: string;
   compact?: boolean;
-  onOpenMedia: (items: ChatViewerItem[], index: number) => void;
+  onOpenMedia: (items: ChatViewerItem[], index: number, messageId?: string) => void;
   onOpenStory: (ownerId: string, storyId: string) => void;
 };
 
@@ -49,9 +53,16 @@ function Avatar({ message }: { message: ChatMessage }) {
   return <span className="dm-avatar small"><SharedAvatar src={message.senderAvatarUrl} name={name} alt={name} /></span>;
 }
 
-function MessageActions({ own, onReply }: { own: boolean; onReply: () => void }) {
+function MessageActions({ own, message, disabled, onReply, onReact, controller, onForward }: {
+  own: boolean; message: ChatMessage; disabled?: boolean; onReply: () => void;
+  onReact: (reaction: ReactionType) => void | Promise<void>;
+  controller: Controller; onForward: () => void;
+}) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLSpanElement | null>(null);
+  const state = controller.messageActionState?.(message);
+  const persisted = !message.deleted && !["sending", "failed", "queued"].includes(message.status ?? "");
+  const pinned = controller.pins?.items.some((item) => item.message.id === message.id);
   useEffect(() => {
     if (!open) return;
     const outside = (event: PointerEvent) => {
@@ -63,14 +74,14 @@ function MessageActions({ own, onReply }: { own: boolean; onReply: () => void })
     return () => { document.removeEventListener("pointerdown", outside); document.removeEventListener("keydown", escape); };
   }, [open]);
   return <span className="dm-message-actions">
-    <button type="button" aria-label="Bày tỏ cảm xúc"><Heart size={15} /></button>
+    <MessageReactionPicker message={message} disabled={disabled} onSelect={onReact} />
     <button type="button" onClick={onReply} aria-label="Trả lời"><Reply size={15} /></button>
     <span ref={rootRef}>
       <button type="button" onClick={() => setOpen((value) => !value)} aria-label="Thao tác khác" aria-expanded={open}><MoreHorizontal size={16} /></button>
       {open && <span className={`dm-message-menu ${own ? "outgoing" : "incoming"}`} role="menu">
-        <button type="button" role="menuitem"><Forward size={14} /> Chuyển tiếp</button>
-        <button type="button" role="menuitem"><Pin size={14} /> Ghim</button>
-        {own ? <button type="button" role="menuitem" className="destructive"><RotateCcw size={14} /> Thu hồi</button> : <button type="button" role="menuitem" className="destructive"><ShieldAlert size={14} /> Báo cáo</button>}
+        {canForward(message) && <button type="button" role="menuitem" onClick={() => { setOpen(false); onForward(); }}><Forward size={14} /> Chuyển tiếp</button>}
+        {persisted && !disabled && controller.pins?.canManage && <button type="button" role="menuitem" disabled={state?.pending} onClick={() => { setOpen(false); void controller.pinMessage(message, !!pinned); }}><Pin size={14} /> {pinned ? "Bỏ ghim" : "Ghim"}</button>}
+        {own ? persisted && !disabled && <button type="button" role="menuitem" className="destructive" disabled={state?.pending} onClick={() => { setOpen(false); void controller.recallMessage(message); }}><RotateCcw size={14} /> Thu hồi</button> : <button type="button" role="menuitem" className="destructive"><ShieldAlert size={14} /> Báo cáo</button>}
       </span>}
     </span>
   </span>;
@@ -87,6 +98,7 @@ function Bubble({ message, controller, userId, compact, latestOutgoing, onOpenMe
 }) {
   const own = message.senderId === userId;
   const [statusOpen, setStatusOpen] = useState(false);
+  const [forward, setForward] = useState(false);
   const typeClass = message.messageType === "IMAGE" ? "image-message" : message.messageType === "AUDIO" ? "audio-message" : message.messageType === "STORY_REPLY" ? "story-reply-bubble" : "text-message";
   const images = mediaItems(message.metadata);
   const audioUrl = message.metadata?.url || message.metadata?.items?.[0]?.url || "";
@@ -102,7 +114,7 @@ function Bubble({ message, controller, userId, compact, latestOutgoing, onOpenMe
         ? () => onOpenStory(message.storyContext!.storyOwnerId, message.storyContext!.storyId)
         : undefined}
     />
-      : message.messageType === "IMAGE" ? <ChatImageMosaic items={images} caption={message.content} onOpen={onOpenMedia} />
+      : message.messageType === "IMAGE" ? <ChatImageMosaic items={images} caption={message.content} onOpen={(items, index) => onOpenMedia(items, index, message.id)} />
       : message.messageType === "AUDIO" ? <ChatAudioPlayer src={audioUrl || ""} durationHint={message.metadata?.duration} compact={compact} />
         : <p className="emoji-text">{message.content}</p>;
   const bubble = <article
@@ -119,10 +131,20 @@ function Bubble({ message, controller, userId, compact, latestOutgoing, onOpenMe
     </div>
     {own && (latestOutgoing || statusOpen) && <span className={compact ? "floating-delivery-status" : "dm-delivery-status"}>{statusText(message.status)}</span>}
   </article>;
+  const actions = <MessageActions own={own} message={message} disabled={controller.active?.isDissolved}
+    controller={controller} onForward={() => setForward(true)}
+    onReply={() => controller.setReplyTo(message)}
+    onReact={(reaction) => controller.selectReaction?.(message.conversationId, message, reaction)} />;
   return <div className={`${compact ? "floating-message-content" : "dm-message-content"} ${own ? "outgoing" : "incoming"}`}>
-    {own && <MessageActions own onReply={() => controller.setReplyTo(message)} />}
-    {bubble}
-    {!own && <MessageActions own={false} onReply={() => controller.setReplyTo(message)} />}
+    {own && actions}
+    <div className="chat-message-stack">
+      {message.forwarded && !message.deleted && <span className="chat-forwarded-label">Đã chuyển tiếp</span>}
+      {bubble}
+      <MessageReactions message={message} actorId={userId} />
+      {controller.messageActionState?.(message).error && <span className="chat-message-action-error" role="alert">{controller.messageActionState(message).error}</span>}
+    </div>
+    {!own && actions}
+    {forward && <ForwardMessageDialog key={`${userId}/${message.id}`} source={message} userId={userId} onClose={() => setForward(false)} />}
   </div>;
 }
 
@@ -151,9 +173,10 @@ export function ChatMessageList({ controller, userId, compact = false, onOpenMed
 
   useEffect(() => {
     if (controller.highlightedSeq == null) return;
-    window.requestAnimationFrame(() => {
-      document.querySelector<HTMLElement>(`[data-chat-seq="${controller.highlightedSeq}"]`)?.scrollIntoView({ block: "center", behavior: "smooth" });
+    const frame = window.requestAnimationFrame(() => {
+      listRef.current?.querySelector<HTMLElement>(`[data-chat-seq="${controller.highlightedSeq}"]`)?.scrollIntoView({ block: "center", behavior: "smooth" });
     });
+    return () => window.cancelAnimationFrame(frame);
   }, [controller.highlightedSeq, messages.length]);
 
   async function onScroll() {

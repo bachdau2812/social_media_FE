@@ -1,3 +1,17 @@
+export type PostInteractionRequest = {
+  postId: string;
+  isClick: boolean;
+  viewTime: number;
+  eventId: string;
+  impressionId: string;
+};
+
+export type PostInteractionAcceptedResponse = {
+  eventId: string;
+  computedScore: number;
+  duplicate: boolean;
+};
+
 export type PostMusicDto = {
   id: string;
   displayName: string;

@@ -1,0 +1,40 @@
+.chat-message-stack { display: flex; flex-direction: column; min-width: 0; max-width: 100%; gap: 3px; }
+/* The stack now owns the flex slot; avoid reserving action width twice inside it. */
+.floating-message-content > .chat-message-stack { flex: 0 1 auto; max-width: calc(100% - 92px); }
+.floating-message-content > .chat-message-stack > .floating-bubble { max-width: 100%; }
+.dm-bubble-row.image-message .chat-message-stack { width: min(330px, 100%); }
+.dm-bubble-row.image-message .chat-message-stack > .dm-bubble { flex: none; }
+.outgoing > .chat-message-stack { align-items: flex-end; }
+.incoming > .chat-message-stack { align-items: flex-start; }
+/* Reaction rows add height; center the avatar instead of following the bottom edge. */
+.dm-message-history .dm-bubble-row.incoming > .dm-avatar.small { align-self: center; margin: 0; }
+.chat-reaction-footer { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; max-width: 100%; padding: 0 4px; }
+.outgoing > .chat-message-stack > .chat-reaction-footer { align-items: flex-end; }
+.chat-reaction-controls, .chat-reaction-picker, .chat-reactors-tabs { display: flex; align-items: center; gap: 4px; }
+.chat-reaction-action { position: relative; }
+.chat-reaction-action button, .chat-reaction-footer button, .chat-reactors-dialog button { border: 0; background: transparent; color: inherit; cursor: pointer; border-radius: 999px; }
+.chat-reaction-action button:focus-visible, .chat-reaction-footer button:focus-visible, .chat-reactors-dialog button:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+.chat-reaction-action button:disabled, .chat-reaction-footer button:disabled { cursor: wait; opacity: .6; }
+.chat-reaction-trigger { display: grid; place-items: center; width: 28px; height: 28px; color: var(--message-muted, #737373); }
+.chat-reaction-trigger.selected, .chat-reaction-count { background: color-mix(in srgb, currentColor 6%, transparent) !important; }
+.chat-reaction-count { display: flex; align-items: center; gap: 4px; padding: 3px 7px; min-height: 26px; font-size: 12px; }
+.chat-reaction-picker { position: absolute; z-index: 30; bottom: calc(100% + 6px); left: 0; width: max-content; padding: 4px; border: 1px solid #ddd; border-radius: 999px; background: var(--surface, #fff); box-shadow: 0 3px 12px #0001; }
+.incoming > .dm-message-actions .chat-reaction-picker { left: auto; right: 0; }
+.chat-reaction-picker button { width: 32px; height: 32px; font-size: 23px; }
+.chat-reaction-picker button[aria-pressed="true"] { background: color-mix(in srgb, currentColor 12%, transparent); }
+.chat-reaction-pending, .chat-reaction-error { font-size: 11px; }
+.chat-reaction-error { color: #b42318; max-width: 240px; }
+.chat-reactors-backdrop { position: fixed; inset: 0; z-index: 1300; display: grid; place-items: center; background: #0006; padding: 16px; }
+.chat-reactors-dialog { width: min(420px, 100%); max-height: min(560px, 80dvh); display: flex; flex-direction: column; overflow: hidden; background: var(--surface, #fff); color: var(--text, #171717); border-radius: 16px; box-shadow: 0 12px 60px #0003; }
+.chat-reactors-dialog header { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; border-bottom: 1px solid #ddd; }
+.chat-reactors-dialog header button { display: grid; place-items: center; width: 32px; height: 32px; }
+.chat-reactors-tabs { overflow-x: auto; padding: 8px 12px; flex-shrink: 0; }
+.chat-reactors-tabs button { flex-shrink: 0; min-width: 36px; min-height: 36px; padding: 4px 7px; font-size: 18px; }
+.chat-reactors-tabs button:first-child { font-size: 13px; }
+.chat-reactors-tabs button[aria-selected="true"] { background: color-mix(in srgb, currentColor 10%, transparent); }
+.chat-reactors-list { overflow-y: auto; padding: 8px 16px 16px; min-height: 100px; }
+.chat-reactors-list > p, .chat-reactors-list > [role="alert"] { text-align: center; font-size: 14px; }
+.chat-reactors-list > button, .chat-reactors-list [role="alert"] button { padding: 8px 12px; background: color-mix(in srgb, currentColor 8%, transparent); }
+.chat-reactor { display: grid; grid-template-columns: 36px minmax(0, 1fr) 28px; align-items: center; gap: 10px; padding: 8px 0; }
+.chat-reactor > :first-child { width: 36px; height: 36px; border-radius: 50%; overflow: hidden; }
+.chat-reactor > span { overflow-wrap: anywhere; }

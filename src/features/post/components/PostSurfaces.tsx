@@ -1,5 +1,5 @@
 import { Archive, Bookmark, Check, ChevronLeft, ChevronRight, Heart, Home, Lock, MessageCircle, MoreHorizontal, Pause, PenLine, Play, RefreshCw, Repeat2, Reply, Send, Users, Volume2, VolumeX, WifiOff, X } from "lucide-react";
-import { type ChangeEvent, type FormEvent, type MouseEvent, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { type ChangeEvent, type FormEvent, type MouseEvent, type RefCallback, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { apiGet, apiSend, uploadCloudinaryMedia } from "../../../shared/api";
 import { Avatar as SharedAvatar } from "../../../shared/components";
@@ -14,6 +14,8 @@ import { useBodyScrollLock } from "../../../shared/overlays/useBodyScrollLock";
 import { PostDetailComposer, type CommentMediaSelection } from "./PostDetailComposer";
 import { AdjacentPostMediaPreloads } from "./AdjacentPostMediaPreloads";
 import { PostVideoPlayer } from "./PostVideoPlayer";
+import { usePostInteraction } from "../hooks/usePostInteraction";
+import { useForegroundOverlay } from "../../../shared/overlays/useForegroundOverlay";
 type Page<T> = { content: T[]; pageNumber: number; totalElements: number; totalPages: number };
 type PostDetails = PostDetailsDto;
 type CommentDto = { id: string; postId: string; userId: string; parentId?: string | null; content?: string | null; commentType?: string | null; mediaUrl?: string | null; timestamp?: string | null; replyCount?: number; hasLiked?: boolean; username?: string | null; fullName?: string | null; avatarUrl?: string | null };
@@ -35,6 +37,9 @@ export function PostCard({ post, index, viewerId, onOpen, onToggle, onEdit, onAr
   const [expanded, setExpanded] = useState(false);
   const [engagementKind, setEngagementKind] = useState<"LIKES" | "REPOSTS" | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  const interaction = usePostInteraction(post.id, viewerId, "feed", Boolean(engagementKind));
+  useForegroundOverlay(Boolean(engagementKind));
+  function openPost() { interaction.click(); onOpen(); }
   const captionLimit = 180;
   const captionNeedsExpansion = post.caption.length > captionLimit;
   const rawCaptionPreview = post.caption.slice(0, captionLimit).trim();
@@ -64,12 +69,12 @@ export function PostCard({ post, index, viewerId, onOpen, onToggle, onEdit, onAr
       <time dateTime={repostActivity.occurredAt}>{formatRelativeTime(repostActivity.occurredAt)}</time>
     </div>}
     <header className="post-author"><button className="author-button" onClick={openAuthor}><Avatar src={post.author.avatarUrl} label={post.author.username} /><span><strong>{post.author.username} <small className="post-author-time">• {formatRelativeTime(post.createdAt)}</small></strong>{post.music && <small className="post-author-music"><MusicIcon /> {post.music.displayName}</small>}</span>{post.author.relationship === "FRIEND" && <Check className="verified-badge" size={14} />}</button><span className="post-menu-anchor"><button className="icon-button" aria-label="Post menu" aria-expanded={menuOpen} onClick={() => setMenuOpen((value) => !value)}><MoreHorizontal size={20} /></button>{menuOpen && <span className="post-menu-popover">{post.author.id === viewerId && <><button type="button" onClick={() => { setMenuOpen(false); onEdit(); }}><PenLine size={16} /> Chỉnh sửa</button><button type="button" onClick={() => { setMenuOpen(false); void onArchive(); }}><Archive size={16} /> Kho lưu trữ</button></>}<button type="button" onClick={() => setMenuOpen(false)}><X size={16} /> Đóng</button></span>}</span></header>
-    <PostMediaCarousel post={post} onOpen={onOpen} />
-    <ActionBar post={post} onToggle={onToggle} onComment={onOpen} onOpenEngagement={setEngagementKind} />
+    <PostMediaCarousel post={post} onOpen={openPost} interactionRef={interaction.ref} />
+    <ActionBar post={post} onToggle={onToggle} onComment={openPost} onOpenEngagement={setEngagementKind} />
     <div className="post-content">
       {post.caption && <p className={expanded ? "feed-caption expanded" : "feed-caption collapsed"}><button onClick={openAuthor}>@{post.author.username}</button> {caption}{captionNeedsExpansion && <button className="text-action" aria-expanded={expanded} onClick={() => setExpanded((value) => !value)}>{expanded ? "Less" : "More"}</button>}</p>}
       {Boolean(post.hashtags?.length) && <div className="hashtag-row">{post.hashtags?.slice(0, 5).map((tag) => <span key={tag}>#{tag}</span>)}</div>}
-      {post.comments[0] && <button className="comment-preview" onClick={onOpen}><strong>@{post.comments[0].author}</strong> {post.comments[0].text}</button>}
+      {post.comments[0] && <button className="comment-preview" onClick={openPost}><strong>@{post.comments[0].author}</strong> {post.comments[0].text}</button>}
       <div className="post-meta"><time>{formatRelativeTime(post.createdAt)}</time></div>
     </div>
     {engagementKind && <EngagementListModal postId={post.id} kind={engagementKind} viewerId={viewerId} onClose={() => setEngagementKind(null)} onOpenProfile={onOpenProfile} />}
@@ -82,7 +87,7 @@ function FeedMediaLayer({ media, className, interactive = false, playbackEligibl
       ? <PostVideoPlayer source={media.url} eligible={interactive && playbackEligible} preload={interactive ? "auto" : "metadata"} />
       : <img src={media.url} alt={interactive ? media.alt : ""} draggable={false} />}
   </span>;
-}function PostMediaCarousel({ post, onOpen }: { post: Post; onOpen: () => void }) {
+}function PostMediaCarousel({ post, onOpen, interactionRef }: { post: Post; onOpen: () => void; interactionRef: RefCallback<HTMLElement> }) {
   const [activeIndex, setActiveIndex] = useState(0);
   const [previousMediaIndex, setPreviousMediaIndex] = useState<number | null>(null);
   const [transitionDirection, setTransitionDirection] = useState<"next" | "previous">("next");
@@ -91,6 +96,10 @@ function FeedMediaLayer({ media, className, interactive = false, playbackEligibl
   const [musicMuted, setMusicMuted] = useState(false);
 
   const frameRef = useRef<HTMLDivElement | null>(null);
+  const setFrameRef = useCallback((node: HTMLDivElement | null) => {
+    frameRef.current = node;
+    interactionRef(node);
+  }, [interactionRef]);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const playbackKeyRef = useRef<string | null>(null);
   const playbackPositions = useRef<Map<string, number>>(new Map());
@@ -203,8 +212,8 @@ function FeedMediaLayer({ media, className, interactive = false, playbackEligibl
     if (audioRef.current?.paused && canPlayMusic && !feedSuspended) void audioRef.current.play().catch(() => undefined);
   }
 
-  if (!post.media.length) return <button className="media-button text-media" onClick={onOpen}><div className="text-post" title={post.caption || "No caption"}>{post.caption || "No caption"}</div></button>;
-  return <div ref={frameRef} className="post-media-frame" style={{ aspectRatio: frameAspectRatio }} tabIndex={0} onKeyDown={(event) => { if (event.key === "ArrowLeft") move(-1); if (event.key === "ArrowRight") move(1); }}>
+  if (!post.media.length) return <button ref={interactionRef} className="media-button text-media" onClick={onOpen}><div className="text-post" title={post.caption || "No caption"}>{post.caption || "No caption"}</div></button>;
+  return <div ref={setFrameRef} className="post-media-frame" style={{ aspectRatio: frameAspectRatio }} tabIndex={0} onKeyDown={(event) => { if (event.key === "ArrowLeft") move(-1); if (event.key === "ArrowRight") move(1); }}>
     <div className="media-surface feed-media-stage" role="button" tabIndex={0} onClick={onOpen} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") onOpen(); }}>
       {previousMedia && <FeedMediaLayer media={previousMedia} className={"feed-media-content exiting slide-" + transitionDirection} />}
       <FeedMediaLayer key={activeMedia.id} media={activeMedia} className={previousMedia ? "feed-media-content entering slide-" + transitionDirection : "feed-media-content"} interactive playbackEligible={playbackActive && !feedSuspended} />
@@ -259,6 +268,9 @@ export function PostDetail({ post, viewerId, targetCommentId, onClose, onToggleP
   const [detailMediaReady, setDetailMediaReady] = useState(false);
   const [engagementKind, setEngagementKind] = useState<"LIKES" | "REPOSTS" | null>(null);
   const [expandedCommentMedia, setExpandedCommentMedia] = useState<CommentMediaViewer | null>(null);
+  const interactionOverlayOpen = Boolean(engagementKind || expandedCommentMedia);
+  const interaction = usePostInteraction(post.id, viewerId, "detail", interactionOverlayOpen);
+  useForegroundOverlay(interactionOverlayOpen);
   const [commentRevision, setCommentRevision] = useState(0);
   const [commentPage, setCommentPage] = useState(0);
   const [commentHasMore, setCommentHasMore] = useState(false);
@@ -595,7 +607,7 @@ export function PostDetail({ post, viewerId, targetCommentId, onClose, onToggleP
 
   return (
     <div className="modal-backdrop post-detail-backdrop" role="dialog" aria-modal="true" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
-      <section className="post-detail" onMouseDown={(event) => event.stopPropagation()}>
+      <section ref={interaction.ref} className="post-detail" onMouseDown={(event) => event.stopPropagation()}>
         <button className="icon-button close detail-close" onClick={onClose} aria-label="Close"><X size={22} /></button>
         <div className="detail-media">{mediaViewer}</div>
         <aside className="detail-panel">

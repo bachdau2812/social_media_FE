@@ -1519,13 +1519,15 @@
   background: rgba(255, 255, 255, 0.1);
 }
 
-.chat-media-viewer > img {
+.chat-media-viewer > img,
+.chat-media-viewer > video {
   display: block;
   max-width: min(1180px, 92vw);
   max-height: calc(100vh - 96px);
   object-fit: contain;
   user-select: none;
 }
+.chat-media-viewer > video { width: min(1180px, 92vw); max-height: calc(100vh - 120px); background: #000; }
 
 .chat-viewer-nav {
   position: fixed;
@@ -1704,10 +1706,14 @@
     padding: 54px 10px max(12px, env(safe-area-inset-bottom, 0px));
   }
 
-  .chat-media-viewer > img {
+  .chat-media-viewer > img,
+  .chat-media-viewer > video {
     max-width: 100vw;
     max-height: calc(100vh - 76px);
   }
+
+  .conversation-media-dialog-backdrop { padding: 0; }
+  .conversation-media-dialog { width: 100vw; height: 100dvh; border: 0; border-radius: 0; }
 
   .chat-viewer-nav {
     display: none;
@@ -2695,6 +2701,13 @@
 .conversation-media-file { display: flex; align-items: center; gap: 10px; min-height: 48px; padding: 0 10px; border-radius: 6px; background: #f2f2ef; color: #252522; text-decoration: none; }
 .conversation-media-file span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .conversation-media-more { min-height: 42px; margin: 14px; border: 1px solid #d8d8d3; border-radius: 6px; background: #fff; }
+.conversation-media-dialog-backdrop { position: fixed; inset: 0; z-index: 1800; display: grid; place-items: center; padding: 18px; background: rgba(12, 12, 11, .42); }
+.conversation-media-dialog { display: flex; width: min(540px, calc(100vw - 36px)); height: min(680px, calc(100dvh - 36px)); min-height: 0; flex-direction: column; overflow: hidden; border: 1px solid #deded9; border-radius: 12px; background: #fff; box-shadow: 0 20px 60px rgba(0, 0, 0, .2); }
+.conversation-media-dialog > header { display: grid; min-height: 54px; grid-template-columns: 40px minmax(0, 1fr) 40px; align-items: center; gap: 8px; padding: 0 10px; border-bottom: 1px solid #e8e8e3; }
+.conversation-media-dialog > header h2 { overflow: hidden; margin: 0; font-size: .9rem; text-overflow: ellipsis; white-space: nowrap; }
+.conversation-media-dialog > header button { display: grid; width: 38px; height: 38px; place-items: center; border: 0; border-radius: 8px; background: transparent; }
+.conversation-media-dialog > header button:hover { background: #f2f2ef; }
+.conversation-media-dialog .conversation-media-browser { flex: 1; }
 .chat-system-message { width: min(82%, 520px); margin: 12px auto; color: #777771; font-size: 0.76rem; line-height: 1.45; text-align: center; }
 .chat-system-message.floating { width: 88%; margin: 8px auto; font-size: 0.7rem; }
 

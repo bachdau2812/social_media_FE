@@ -1,10 +1,11 @@
 import { API_BASE_URL } from "../../../shared/api";
+import type { MessageReactionFields, ReactionState } from "../model/chatReactions";
 
-export type RealtimeChatMessage = {
+export type RealtimeChatMessage = MessageReactionFields & {
   id: string;
   conversationId: string;
   messageSeq: number;
-  clientMessageId?: string;
+  clientMessageId?: string | null;
   senderId: string;
   senderDisplayName?: string | null;
   senderAvatarUrl?: string | null;
@@ -16,10 +17,11 @@ export type RealtimeChatMessage = {
   createdAt?: string | null;
   editedAt?: string | null;
   deleted?: boolean;
+  forwarded?: boolean;
 };
 
 export type ChatRealtimeEvent = {
-  type: "MESSAGE_CREATED" | "CURSOR_UPDATED" | "GROUP_CREATED" | "MEMBER_ADDED" | "MEMBER_REMOVED";
+  type: "MESSAGE_CREATED" | "CURSOR_UPDATED" | "GROUP_CREATED" | "MEMBER_ADDED" | "MEMBER_REMOVED" | "MESSAGE_REACTION_CHANGED" | "MESSAGE_DELETED" | "PINS_CHANGED";
   eventId: string;
   conversationId: string;
   actorId: string;
@@ -28,6 +30,8 @@ export type ChatRealtimeEvent = {
   message?: RealtimeChatMessage | null;
   deliveredSeq?: number | null;
   readSeq?: number | null;
+  reactionState?: ReactionState | null;
+  pinVersion?: number | null;
 };
 
 type Listener = (event: ChatRealtimeEvent) => void;
@@ -36,6 +40,7 @@ class ChatRealtimeClient {
   private socket: WebSocket | null = null;
   private userId: string | null = null;
   private listeners = new Set<Listener>();
+  private reconnectListeners = new Set<() => void>();
   private heartbeatTimer: number | null = null;
   private reconnectTimer: number | null = null;
   private reconnectAttempt = 0;
@@ -65,6 +70,11 @@ class ChatRealtimeClient {
       this.listeners.delete(listener);
       if (this.listeners.size === 0) this.disconnect();
     };
+  }
+
+  subscribeReconnect(listener: () => void) {
+    this.reconnectListeners.add(listener);
+    return () => { this.reconnectListeners.delete(listener); };
   }
 
   rememberRecipientCursor(conversationId: string, deliveredSeq = 0, readSeq = 0) {
@@ -120,6 +130,7 @@ class ChatRealtimeClient {
       this.reconnectAttempt = 0;
       this.startHeartbeat();
       this.send({ type: "HEARTBEAT" });
+      this.reconnectListeners.forEach((listener) => listener());
     };
     socket.onmessage = (message) => {
       if (this.socket !== socket) return;
@@ -195,4 +206,3 @@ class ChatRealtimeClient {
 }
 
 export const chatRealtime = new ChatRealtimeClient();
-

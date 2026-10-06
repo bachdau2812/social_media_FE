@@ -1,10 +1,10 @@
 import { ChevronLeft } from "lucide-react";
-import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { apiGet, apiSend } from "../shared/api";
 import { useViewportMode } from "../shared/hooks/useViewportMode";
 import type { ViewKey } from "./router/navigation.types";
-import { postDetailsToPost as mapPostDetailsToPost, usePostEventStream, type Post, type PostDetailsDto, type RepostToggleResponse } from "../features/post";
-import { profileApi, profileToIdentity, profileToView as mapProfileToView, type ConnectionTab, type ConnectionUserDto, type Profile, type ProfileDto as FeatureProfileDto } from "../features/profile";
+import { usePostEventStream, type Post, type RepostToggleResponse } from "../features/post";
+import { profileApi, profileToView as mapProfileToView, type ConnectionTab, type ConnectionUserDto, type Profile } from "../features/profile";
 import { archivedStoryToItem, type StoryArchiveDto, type StoryItem } from "../features/story";
 import { ChatScreen, FloatingMessenger, useChatUnreadCount, type ChatNavigationTarget, type ConversationDto } from "../features/chat";
 import { NotificationScreen as FeatureNotificationScreen, refreshNotificationUnreadCount, startForegroundPushNotifications, stopForegroundPushNotifications, syncGrantedPushRegistration, useNotificationUnreadCount } from "../features/notification";
@@ -14,6 +14,13 @@ import { consumePendingNotificationDestination, decodeNotificationDeepLink, save
 import { StoryCreatorStudio, StoryViewer, orderStoryQueue, persistSeenStoryIds, readSeenStoryIds, storyApi, storyStartIndex, type StoryHighlightDto } from "../features/story";
 import { PostCreationStudio, PostDetail, PostEditDialog } from "../features/post";
 import { useFeedMediaSuspension } from "../features/post/hooks/useFeedMediaSuspension";
+import { PostInteractionProvider } from "../features/post/hooks/PostInteractionProvider";
+import { useAppNavigation } from "./router/useAppNavigation";
+import { destinationPath } from "./router/appRoute";
+import { usePostRoute } from "./router/usePostRoute";
+import { useStoryRoute } from "./router/useStoryRoute";
+import { routes } from "./router/routes";
+import { ScreenLocationProvider } from "./router/ScreenLocation";
 import { SuggestedFriendsPanel } from "../features/suggestions";
 import type { ContentDraft } from "../features/library";
 import { BootScreen, LoginScreen } from "../features/auth";
@@ -47,30 +54,7 @@ function FeatureLoading() {
     return <div className="app-route-fallback" role="status" aria-label="Đang tải"><span/><span/><span/></div>;
 }
 type LoadState = "idle" | "loading" | "ready" | "error";
-type NavigationEntry = {
-    view: ViewKey;
-    profileUserId: string | null;
-    scrollY: number;
-};
-type Page<T> = {
-    content: T[];
-    pageNumber: number;
-    totalElements: number;
-    totalPages: number;
-};
-const ACTIVE_VIEW_STORAGE_KEY = "social-media-active-view";
 const ACTIVE_FEED_TAB_STORAGE_KEY = "social-media-active-feed-tab";
-const PROFILE_USER_STORAGE_KEY = "social-media-profile-user";
-const persistedViews = new Set<ViewKey>(["home", "search", "create", "profile", "notifications", "library", "settings", "chat", "states"]);
-function readStoredView(): ViewKey {
-    try {
-        const stored = sessionStorage.getItem(ACTIVE_VIEW_STORAGE_KEY) as ViewKey | null;
-        return stored && persistedViews.has(stored) ? stored : "home";
-    }
-    catch {
-        return "home";
-    }
-}
 function readStoredFeedTab(): "DISCOVER" | "FRIENDS" {
     try {
         return sessionStorage.getItem(ACTIVE_FEED_TAB_STORAGE_KEY) === "FRIENDS" ? "FRIENDS" : "DISCOVER";
@@ -79,28 +63,22 @@ function readStoredFeedTab(): "DISCOVER" | "FRIENDS" {
         return "DISCOVER";
     }
 }
-function readStoredProfileUserId(): string | null {
-    try {
-        return sessionStorage.getItem(PROFILE_USER_STORAGE_KEY);
-    }
-    catch {
-        return null;
-    }
-}
 export default function SocialApplication() {
     const { session, status: authStatus, error: authError, login, logout } = useAuth();
-    const [view, setView] = useState<ViewKey>(readStoredView);
-    const [navigationHistory, setNavigationHistory] = useState<NavigationEntry[]>([]);
+    const navigation = useAppNavigation();
+    const { go, openResource, restoreScroll } = navigation;
+    const view = navigation.screen.view;
+    const profileUserId = navigation.screen.profileUserId ?? session?.userId;
     const [feedTab, setFeedTab] = useState<"DISCOVER" | "FRIENDS">(readStoredFeedTab);
     const feedScrollPositions = useRef<Record<"DISCOVER" | "FRIENDS", number>>({ DISCOVER: 0, FRIENDS: 0 });
     const feed = useFeedController();
     const { posts, stories, hasMore: feedHasMore, loadingMore: feedLoadingMore, setPosts } = feed;
-    const [selectedStoryIndex, setSelectedStoryIndex] = useState<number | null>(null);
+    const storyRoute = useStoryRoute(navigation.route.story, session?.userId);
+    const selectedStoryIndex = storyRoute.index;
+    const setSelectedStoryIndex = storyRoute.setIndex;
     const [profile, setProfile] = useState<Profile | null>(null);
-    const [profileUserId, setProfileUserId] = useState<string | null>(readStoredProfileUserId);
     const [connectionTab, setConnectionTab] = useState<ConnectionTab>("FOLLOWERS");
     const [connectionsOpen, setConnectionsOpen] = useState(false);
-    const [selectedPost, setSelectedPost] = useState<Post | null>(null);
     const [editingPost, setEditingPost] = useState<Post | null>(null);
     const [status, setStatus] = useState<LoadState>("idle");
     const [errorText, setErrorText] = useState("");
@@ -112,44 +90,66 @@ export default function SocialApplication() {
     const [miniChatRequest, setMiniChatRequest] = useState<(ChatNavigationTarget & {
         nonce: number;
     }) | null>(null);
-    const [storyCreatorOpen, setStoryCreatorOpen] = useState(false);
+    const storyCreatorOpen = Boolean(navigation.route.createStory);
     const [resumeDraft, setResumeDraft] = useState<ContentDraft | null>(null);
     const [seenStoryIds, setSeenStoryIds] = useState<Set<string>>(new Set());
     const [recentlySeenStoryIds, setRecentlySeenStoryIds] = useState<Set<string>>(new Set());
-    const [fullChatTarget, setFullChatTarget] = useState<ChatNavigationTarget | null>(null);
-    const [storyViewerStories, setStoryViewerStories] = useState<StoryItem[] | null>(null);
-    const [targetCommentId, setTargetCommentId] = useState<string | null>(null);
+    const fullChatTarget = navigation.screen.chatTarget ?? null;
+    const activeConversationId = fullChatTarget?.conversationId;
+    const storyViewerStories = storyRoute.stories;
+    const setStoryViewerStories = storyRoute.setStories;
+    const targetCommentId = navigation.route.commentId ?? null;
+    const { post: selectedPost, setPost: setSelectedPost, error: postRouteError, retry: retryPostRoute } = usePostRoute(
+        navigation.route.postId, session?.userId, [...posts, ...(profile?.posts ?? []), ...(profile?.reposts ?? [])],
+    );
+    const activePostId = selectedPost?.id;
+    const screenRequestVersion = useRef(0);
+    const loadedFeedKey = useRef<string | null>(null);
+    const loadFeed = feed.load;
+    const invalidateFeed = feed.invalidate;
     const initialDestinationHandled = useRef(false);
+    const navigateToDestination = useCallback(async (destination: AppDestination) => {
+        if (!session?.userId) {
+            savePendingNotificationDestination(destination);
+            return;
+        }
+        setCreateMenuOpen(false);
+        setConnectionsOpen(false);
+        if (destination.kind === "conversation" && destination.surface === "mini" && viewportMode !== "mobile") {
+            setMiniChatRequest({ ...destination, nonce: Date.now() });
+        } else if (destination.kind === "post" || destination.kind === "story") {
+            openResource(destinationPath(destination));
+        } else go(destinationPath(destination));
+    }, [session?.userId, viewportMode, go, openResource]);
     useEffect(() => {
         if (session?.userId) {
             setSeenStoryIds(readSeenStoryIds(session.userId));
             setRecentlySeenStoryIds(new Set());
-        }
+        } else initialDestinationHandled.current = false;
     }, [session?.userId]);
     useEffect(() => installPageVisibilityMediaController(), []);
     useEffect(() => {
         if (initialDestinationHandled.current)
             return;
-        const destination = decodeNotificationDeepLink(window.location.href);
-        if (!session) {
+        const destination = decodeNotificationDeepLink(`${navigation.location.pathname}${navigation.location.search}`);
+        if (!session?.userId) {
             if (destination)
                 savePendingNotificationDestination(destination);
             return;
         }
-        const target = consumePendingNotificationDestination() ?? destination;
+        const target = consumePendingNotificationDestination();
         initialDestinationHandled.current = true;
-        if (target) {
+        if (target && navigation.location.pathname === "/" && !navigation.location.search) {
             void navigateToDestination(target);
-            window.history.replaceState(window.history.state, "", "/");
         }
-    }, [session?.userId]);
+    }, [session?.userId, navigation.location.pathname, navigation.location.search, navigateToDestination]);
     useEffect(() => subscribeToNotificationNavigation((destination) => {
-        if (!session) {
+        if (!session?.userId) {
             savePendingNotificationDestination(destination);
             return;
         }
         void navigateToDestination(destination);
-    }), [session?.userId]);
+    }), [session?.userId, navigateToDestination]);
     useEffect(() => {
         if (!session?.userId)
             return;
@@ -163,7 +163,7 @@ export default function SocialApplication() {
             return;
         }
         void startForegroundPushNotifications({
-            getActiveDestination: () => view === "chat" && fullChatTarget ? { kind: "conversation", conversationId: fullChatTarget.conversationId } : selectedPost ? { kind: "post", postId: selectedPost.id } : null,
+            getActiveDestination: () => view === "chat" && activeConversationId ? { kind: "conversation", conversationId: activeConversationId } : activePostId ? { kind: "post", postId: activePostId } : null,
             onReceived: () => {
                 refreshNotificationUnreadCount();
                 if (view === "notifications")
@@ -171,29 +171,52 @@ export default function SocialApplication() {
             },
         });
         return () => stopForegroundPushNotifications();
-    }, [session?.userId, view, fullChatTarget?.conversationId, selectedPost?.id]);
-    useEffect(() => {
-        try {
-            sessionStorage.setItem(ACTIVE_VIEW_STORAGE_KEY, view);
-        }
-        catch { /* Storage can be unavailable in privacy mode. */ }
-    }, [view]);
+    }, [session?.userId, view, activeConversationId, activePostId]);
     useEffect(() => {
         try {
             sessionStorage.setItem(ACTIVE_FEED_TAB_STORAGE_KEY, feedTab);
         }
         catch { /* Storage can be unavailable in privacy mode. */ }
     }, [feedTab]);
+    const loadScreenData = useCallback(async (target: ViewKey, userId: string, tab: "DISCOVER" | "FRIENDS", reuseFeed = false) => {
+        const version = ++screenRequestVersion.current;
+        setStatus("loading");
+        setErrorText("");
+        try {
+            if (target === "home") {
+                const key = `${userId}:${tab}`;
+                if (!reuseFeed || loadedFeedKey.current !== key) {
+                    await loadFeed(userId, tab);
+                    if (version === screenRequestVersion.current) loadedFeedKey.current = key;
+                }
+            } else invalidateFeed();
+            if (target === "profile") {
+                const data = await profileApi.getSummary(profileUserId ?? userId, userId);
+                if (version === screenRequestVersion.current) setProfile(mapProfileToView(data));
+            }
+            if (version === screenRequestVersion.current) setStatus("ready");
+        } catch (error) {
+            if (version !== screenRequestVersion.current) return;
+            setStatus("error");
+            setErrorText(error instanceof Error ? error.message : "Request failed");
+        }
+    }, [loadFeed, invalidateFeed, profileUserId]);
     useEffect(() => {
-        if (session)
-            void loadScreenData(view, session.userId, feedTab);
-    }, [view, feedTab, session?.userId, profileUserId]);
+        if (session?.userId && navigation.screen.known) void loadScreenData(view, session.userId, feedTab, true);
+        return () => { screenRequestVersion.current += 1; };
+    }, [view, feedTab, session?.userId, loadScreenData, navigation.screen.known]);
+    useLayoutEffect(() => { if (status === "ready") restoreScroll(); }, [status, restoreScroll]);
     useFeedMediaSuspension({
         postDetailOpen: Boolean(selectedPost),
         storyCreatorOpen,
         storyViewerOpen: selectedStoryIndex !== null,
     });
     usePostEventStream(session?.userId, {
+        onAvatarUploadResult: (data) => {
+            showAppToast(data.result === "APPROVED" ? "Đã cập nhật ảnh đại diện" : "Ảnh đại diện không được chấp nhận");
+            if (data.result === "APPROVED")
+                setProfile((value) => value?.id === data.userId ? { ...value, avatarUrl: data.mediaUrl } : value);
+        },
         onUploadResult: (data) => {
             const fallback = data.kind === "story"
                 ? data.success ? "Story đã được đăng" : "Không thể đăng Story"
@@ -212,12 +235,6 @@ export default function SocialApplication() {
         setErrorText("");
         try {
             await login(username, password);
-            setNavigationHistory([]);
-            try {
-                sessionStorage.setItem(ACTIVE_VIEW_STORAGE_KEY, "home");
-            }
-            catch { /* Ignore unavailable storage. */ }
-            setView("home");
         }
         catch (error) {
             setErrorText(error instanceof Error ? error.message : "Login failed");
@@ -226,34 +243,13 @@ export default function SocialApplication() {
     async function handleLogout() {
         await logout();
         try {
-            sessionStorage.removeItem(ACTIVE_VIEW_STORAGE_KEY);
             sessionStorage.removeItem(ACTIVE_FEED_TAB_STORAGE_KEY);
-            sessionStorage.removeItem(PROFILE_USER_STORAGE_KEY);
         }
         catch { /* Ignore unavailable storage. */ }
-        setNavigationHistory([]);
         feed.clear();
+        loadedFeedKey.current = null;
         setProfile(null);
-        setProfileUserId(null);
-    }
-    async function loadScreenData(target: ViewKey, userId: string, tab: "DISCOVER" | "FRIENDS") {
-        setStatus("loading");
-        setErrorText("");
-        try {
-            if (target === "home") {
-                await feed.load(userId, tab);
-            }
-            else {
-                feed.invalidate();
-            }
-            if (target === "profile")
-                await openProfile(profileUserId ?? userId, false);
-            setStatus("ready");
-        }
-        catch (error) {
-            setStatus("error");
-            setErrorText(error instanceof Error ? error.message : "Request failed");
-        }
+        navigation.go(routes.home, { replace: true });
     }
     async function loadMoreFeed() {
         if (!session || view !== "home" || status !== "ready" || !feedHasMore || feedLoadingMore)
@@ -265,16 +261,12 @@ export default function SocialApplication() {
             showAppToast(error instanceof Error ? error.message : "Không thể tải thêm bài viết");
         }
     }
-    async function getProfile(userId: string, viewerId: string) {
-        const data = await profileApi.getSummary(userId, viewerId);
-        return mapProfileToView(data);
-    }
     function openPostDetail(post: Post, commentId: string | null = null) {
-        setTargetCommentId(commentId);
         setSelectedPost(post);
+        navigation.openResource(destinationPath({ kind: "post", postId: post.id, ...(commentId ? { commentId } : {}) }));
     }
     function closePostDetail() {
-        setSelectedPost(null);
+        navigation.closeResource();
     }
     function switchFeedTab(nextTab: "DISCOVER" | "FRIENDS") {
         if (nextTab === feedTab)
@@ -283,130 +275,11 @@ export default function SocialApplication() {
         setFeedTab(nextTab);
         window.setTimeout(() => window.scrollTo({ top: feedScrollPositions.current[nextTab] ?? 0, behavior: "auto" }), 80);
     }
-    function rememberNavigation(targetView: ViewKey, targetProfileUserId: string | null = null) {
-        const currentProfileUserId = view === "profile" ? profileUserId : null;
-        const nextProfileUserId = targetView === "profile" ? targetProfileUserId : null;
-        if (view === targetView && currentProfileUserId === nextProfileUserId)
-            return;
-        setNavigationHistory((history) => [
-            ...history,
-            { view, profileUserId: currentProfileUserId, scrollY: window.scrollY },
-        ].slice(-30));
-    }
     async function openProfile(userId: string, navigate = true) {
         if (!session)
             return;
-        const data = await getProfile(userId, session.userId);
-        if (navigate)
-            rememberNavigation("profile", userId);
-        setProfileUserId(userId);
-        try {
-            sessionStorage.setItem(PROFILE_USER_STORAGE_KEY, userId);
-        }
-        catch { /* Ignore unavailable storage. */ }
-        setProfile(data);
-        setSelectedPost(null);
-        setSelectedStoryIndex(null);
-        if (navigate)
-            setView("profile");
-    }
-    async function navigateToDestination(destination: AppDestination) {
-        if (!session) {
-            savePendingNotificationDestination(destination);
-            return;
-        }
-        setCreateMenuOpen(false);
-        if (destination.kind === "home") {
-            navigateToView("home");
-            return;
-        }
-        if (destination.kind === "profile") {
-            await openProfile(destination.userId);
-            return;
-        }
-        if (destination.kind === "post") {
-            try {
-                const details = await apiGet<PostDetailsDto>(`/posts/${encodeURIComponent(destination.postId)}?mediaType=POST`);
-                openPostDetail(mapPostDetailsToPost(details), destination.commentId ?? null);
-            }
-            catch {
-                showAppToast("Bài viết không còn tồn tại hoặc bạn không có quyền xem");
-            }
-            return;
-        }
-        if (destination.kind === "conversation") {
-            const target: ChatNavigationTarget = { conversationId: destination.conversationId, ...(destination.messageId ? { messageId: destination.messageId } : {}), ...(destination.messageSeq !== undefined ? { messageSeq: destination.messageSeq } : {}), ...(destination.panel ? { panel: destination.panel } : {}) };
-            if (destination.surface === "mini" && viewportMode !== "mobile") {
-                setMiniChatRequest({ ...target, nonce: Date.now() });
-            }
-            else {
-                rememberNavigation("chat");
-                setFullChatTarget(target);
-                setView("chat");
-            }
-            return;
-        }
-        if (destination.kind === "story") {
-            const requestedId = destination.storyItemId || destination.storyId;
-            try {
-                const page = await apiGet<Page<StoryArchiveDto>>(`/profile-media/${encodeURIComponent(destination.ownerId)}/stories?page=0&size=50&mediaType=STORY`);
-                let ownerProfile: FeatureProfileDto | null = null;
-                try {
-                    ownerProfile = await profileApi.getSummary(destination.ownerId, session.userId, 0);
-                }
-                catch {
-                    ownerProfile = null;
-                }
-                const ownerIdentity = ownerProfile ? profileToIdentity(ownerProfile) : undefined;
-                const scoped = (page.content ?? []).map((story) => archivedStoryToItem(story, ownerIdentity));
-                if (destination.scope === "single" && requestedId) {
-                    const requestedStory = scoped.find((item) => item.id === requestedId);
-                    const unavailableStory: StoryItem = {
-                        id: requestedId,
-                        userId: destination.ownerId,
-                        name: ownerIdentity?.fullName || ownerIdentity?.username || "Người dùng",
-                        username: ownerIdentity?.username || "",
-                        avatarUrl: ownerIdentity?.avatarUrl || "",
-                        status: "EXPIRED",
-                        replyEnabled: false,
-                        viewerSeen: true,
-                        totalItems: 1,
-                        seenItems: 1,
-                        state: "seen",
-                    };
-                    setStoryViewerStories([requestedStory ?? unavailableStory]);
-                    setSelectedStoryIndex(0);
-                    return;
-                }
-                if (!scoped.length) {
-                    showAppToast("Story không còn khả dụng");
-                    return;
-                }
-                const startIndex = requestedId ? Math.max(0, scoped.findIndex((item) => item.id === requestedId)) : 0;
-                setStoryViewerStories(destination.scope === "owner" ? scoped : null);
-                setSelectedStoryIndex(startIndex);
-            }
-            catch {
-                if (destination.scope === "single" && requestedId) {
-                    setStoryViewerStories([{
-                        id: requestedId,
-                        userId: destination.ownerId,
-                        name: "Người dùng",
-                        username: "",
-                        avatarUrl: "",
-                        status: "EXPIRED",
-                        replyEnabled: false,
-                        viewerSeen: true,
-                        totalItems: 1,
-                        seenItems: 1,
-                        state: "seen",
-                    }]);
-                    setSelectedStoryIndex(0);
-                    return;
-                }
-                showAppToast("Không thể tải Story");
-            }
-        }
+        if (navigate) navigation.go(routes.profile(userId));
+        else await loadScreenData("profile", session.userId, feedTab);
     }
     async function openChatForUser(targetUserId: string) {
         if (!session)
@@ -414,9 +287,7 @@ export default function SocialApplication() {
         try {
             const conversation = await apiSend<ConversationDto>(`/chat/conversations/direct?actorId=${encodeURIComponent(session.userId)}`, "POST", { targetUserId });
             if (viewportMode === "mobile") {
-                rememberNavigation("chat");
-                setFullChatTarget({ conversationId: conversation.id });
-                setView("chat");
+                navigation.go(routes.conversation(conversation.id));
             }
             else {
                 setMiniChatRequest({ conversationId: conversation.id, nonce: Date.now() });
@@ -431,19 +302,9 @@ export default function SocialApplication() {
             setCreateMenuOpen(true);
             return;
         }
-        const targetProfileUserId = target === "profile" && session ? session.userId : null;
-        rememberNavigation(target, targetProfileUserId);
         setConnectionsOpen(false);
-        setSelectedPost(null);
         setSelectedStoryIndex(null);
-        if (target === "profile" && session) {
-            setProfileUserId(session.userId);
-            try {
-                sessionStorage.setItem(PROFILE_USER_STORAGE_KEY, session.userId);
-            }
-            catch { /* Ignore unavailable storage. */ }
-        }
-        setView(target);
+        navigation.go(target === "profile" && session ? routes.profile(session.userId) : target === "home" ? routes.home : `/${target}`);
     }
     function handleBackNavigation() {
         if (selectedPost) {
@@ -451,42 +312,18 @@ export default function SocialApplication() {
             return;
         }
         if (selectedStoryIndex !== null) {
-            setSelectedStoryIndex(null);
+            navigation.closeResource();
             return;
         }
         if (connectionsOpen) {
             setConnectionsOpen(false);
             return;
         }
-        const previous = navigationHistory[navigationHistory.length - 1];
-        if (!previous) {
-            if (view !== "home") {
-                setProfileUserId(null);
-                setView("home");
-                window.scrollTo({ top: 0, behavior: "auto" });
-            }
-            return;
-        }
-        setNavigationHistory((history) => history.slice(0, -1));
-        setConnectionsOpen(false);
-        setSelectedPost(null);
-        setSelectedStoryIndex(null);
-        setProfileUserId(previous.profileUserId);
-        if (previous.profileUserId) {
-            try {
-                sessionStorage.setItem(PROFILE_USER_STORAGE_KEY, previous.profileUserId);
-            }
-            catch { /* Ignore unavailable storage. */ }
-        }
-        setView(previous.view);
-        window.setTimeout(() => window.scrollTo({ top: previous.scrollY, behavior: "auto" }), 80);
+        navigation.back();
     }
     function reloadHomeFromSidebar() {
-        try {
-            sessionStorage.setItem(ACTIVE_VIEW_STORAGE_KEY, "home");
-        }
-        catch { /* Ignore unavailable storage. */ }
-        window.location.reload();
+        if (view === "home" && !navigation.resourceOpen && session) void loadScreenData("home", session.userId, feedTab);
+        else navigation.go(routes.home);
     }
     function openConnections(tab: ConnectionTab) {
         setConnectionTab(tab);
@@ -615,21 +452,32 @@ export default function SocialApplication() {
         })).map((story) => ({ ...story, collectionId: highlight.id }));
         if (!items.length)
             return;
-        setStoryViewerStories(items);
-        setSelectedStoryIndex(0);
+        openStoryQueue(items, 0, "owner");
+    }
+    function openStoryQueue(queue: StoryItem[], index: number, scope: "owner" | "rail" = "rail") {
+        const item = queue[index];
+        if (!item) return;
+        storyRoute.seed(queue, index);
+        navigation.openResource(destinationPath({ kind: "story", ownerId: item.userId, storyId: item.id, scope }));
+    }
+    function selectStoryIndex(index: number) {
+        const item = storyViewerStories[index];
+        if (!item) return;
+        setSelectedStoryIndex(index);
+        navigation.openResource(destinationPath({ kind: "story", ownerId: item.userId, storyId: item.id, scope: navigation.route.story?.scope ?? "rail" }), { replace: true });
     }
     async function handleDeleteStory(storyId: string) {
         if (!session)
             return;
         await storyApi.deleteStory(storyId);
-        const nextQueue = activeStoryQueue.filter((story) => story.id !== storyId);
+        const nextQueue = storyViewerStories.filter((story) => story.id !== storyId);
         if (!nextQueue.length) {
-            setSelectedStoryIndex(null);
-            setStoryViewerStories(null);
+            navigation.closeResource();
         }
         else {
             setStoryViewerStories(nextQueue);
-            setSelectedStoryIndex((current) => Math.min(current ?? 0, nextQueue.length - 1));
+            const index = Math.min(selectedStoryIndex ?? 0, nextQueue.length - 1);
+            openStoryQueue(nextQueue, index, navigation.route.story?.scope === "owner" ? "owner" : "rail");
         }
         void loadScreenData("home", session.userId, feedTab);
         showAppToast("Đã xóa Story");
@@ -637,14 +485,15 @@ export default function SocialApplication() {
     if (authStatus === "loading")
         return <BootScreen />;
     const orderedStories = session ? orderStoryQueue(stories, session.userId, seenStoryIds, recentlySeenStoryIds) : stories;
-    const activeStoryQueue = storyViewerStories ?? orderedStories;
+    const activeStoryQueue = storyViewerStories;
     if (!session)
         return <LoginScreen errorText={errorText || authError} loading={false} onLogin={handleLogin}/>;
-    const showBackButton = navigationHistory.length > 0 || view !== "home";
+    const showBackButton = navigation.hasBack;
     const shellClassName = view === "home" ? "home-shell" : view === "chat" ? "chat-shell" : "centered-shell";
     const showMobileChrome = view !== "create";
-    return (<>
-      <ResponsiveAppShell
+    const coveringOverlayOpen = storyCreatorOpen || Boolean(navigation.route.story) || Boolean(editingPost) || connectionsOpen || createMenuOpen;
+    return (<PostInteractionProvider viewerId={session.userId} feedBlocked={Boolean(navigation.route.postId) || coveringOverlayOpen} detailBlocked={coveringOverlayOpen}>
+      <ScreenLocationProvider location={navigation.screenLocation}><ResponsiveAppShell
         className={shellClassName}
         viewportMode={viewportMode}
         desktopNavigation={<Navigation active={view} chatUnreadCount={chatUnreadCount} notificationUnreadCount={notificationUnreadCount} onNavigate={navigateToView} onReloadHome={reloadHomeFromSidebar} onLogout={handleLogout}/>}
@@ -654,7 +503,8 @@ export default function SocialApplication() {
       >
         {showBackButton && viewportMode !== "mobile" && view !== "chat" && <button type="button" className="app-back-button" onClick={handleBackNavigation} aria-label="Quay lại màn trước" title="Quay lại"><ChevronLeft size={20}/></button>}
         {status === "error" && <InlineError message={errorText} onRetry={() => loadScreenData(view, session.userId, feedTab)}/>}
-        {view === "home" && <HomeScreen userId={session.userId} tab={feedTab} setTab={switchFeedTab} stories={orderedStories} posts={posts} status={status} hasMore={feedHasMore} loadingMore={feedLoadingMore} onLoadMore={loadMoreFeed} onSelectPost={openPostDetail} onCreateStory={() => setStoryCreatorOpen(true)} onSelectStory={(story) => { const queue = [...orderedStories]; setStoryViewerStories(queue); setSelectedStoryIndex(storyStartIndex(queue, story.userId)); }} onTogglePost={togglePost} onEditPost={setEditingPost} onArchivePost={handleArchivePost} onOpenProfile={openProfile}/>}
+        {!navigation.route.known && <div role="alert" className="feed-state"><strong>Không tìm thấy trang</strong><button onClick={() => navigation.go(routes.home, { replace: true })}>Về trang chủ</button></div>}
+        {navigation.route.known && view === "home" && <HomeScreen userId={session.userId} tab={feedTab} setTab={switchFeedTab} stories={orderedStories} posts={posts} status={status} hasMore={feedHasMore} loadingMore={feedLoadingMore} onLoadMore={loadMoreFeed} onSelectPost={openPostDetail} onCreateStory={() => navigation.openResource(routes.createStory)} onSelectStory={(story) => { const queue = [...orderedStories]; openStoryQueue(queue, storyStartIndex(queue, story.userId)); }} onTogglePost={togglePost} onEditPost={setEditingPost} onArchivePost={handleArchivePost} onOpenProfile={openProfile}/>}
         {view === "search" && <Suspense fallback={<FeatureLoading/>}><FeatureSearchScreen viewerId={session.userId} onSelectPost={openPostDetail} onOpenProfile={openProfile}/></Suspense>}
         {view === "create" && <PostCreationStudio userId={session.userId} initialDraft={resumeDraft?.draftType === "POST" ? resumeDraft : null} onBack={() => { setResumeDraft(null); handleBackNavigation(); }} onClose={() => { setResumeDraft(null); handleBackNavigation(); }} onDraftSaved={() => undefined} onPublished={() => loadScreenData("home", session.userId, feedTab)}/>}
         {view === "notifications" && <FeatureNotificationScreen userId={session.userId} onNavigate={navigateToDestination}/>}
@@ -663,30 +513,31 @@ export default function SocialApplication() {
                     const item = page.content.find((entry) => entry.id === storyId);
                     if (!item)
                         return;
-                    setStoryViewerStories([archivedStoryToItem(item, { username: session.username, fullName: session.username })]);
-                    setSelectedStoryIndex(0);
+                    openStoryQueue([archivedStoryToItem(item, { username: session.username, fullName: session.username })], 0, "owner");
                 });
             }} onResumeDraft={(draft: ContentDraft) => {
                 setResumeDraft(draft);
                 if (draft.draftType === "STORY")
-                    setStoryCreatorOpen(true);
+                    navigation.openResource(routes.createStory);
                 else
-                    setView("create");
+                    navigation.go(routes.createPost);
             }}/></Suspense>}
-        {view === "chat" && <ChatScreen userId={session.userId} username={session.username} onOpenProfile={openProfile} onOpenStory={openStoryFromReply} initialTarget={fullChatTarget}/>}
-        {view === "profile" && <ProfileScreen viewerId={session.userId} profile={profile} onSelectPost={openPostDetail} onOpenStoryHighlight={openStoryHighlight} onOpenArchive={() => navigateToView("library")} onOpenConnections={openConnections} onRefresh={async () => {
+        {view === "chat" && <ChatScreen userId={session.userId} username={session.username} onOpenProfile={openProfile} onOpenStory={openStoryFromReply} initialTarget={fullChatTarget} onSelectConversation={(id) => navigation.go(id ? routes.conversation(id) : routes.chat)}/>}
+        {view === "profile" && <ProfileScreen viewerId={session.userId} profile={profile?.id === profileUserId ? profile : null} onSelectPost={openPostDetail} onOpenStoryHighlight={openStoryHighlight} onOpenArchive={() => navigateToView("library")} onOpenConnections={openConnections} onRefresh={async () => {
                 if (profile)
                     await openProfile(profile.id, false);
             }} onMessage={openChatForUser} onOpenProfile={openProfile}/>}
         {view === "settings" && <Suspense fallback={<FeatureLoading/>}><FeatureSettingsScreen userId={session.userId}/></Suspense>}
         {view === "states" && <SystemStates />}
-      </ResponsiveAppShell>
-      <CreateContentMenu open={createMenuOpen} onClose={() => setCreateMenuOpen(false)} onCreatePost={() => { rememberNavigation("create"); setView("create"); }} reelsAvailable={false}/>
+      </ResponsiveAppShell></ScreenLocationProvider>
+      <CreateContentMenu open={createMenuOpen} onClose={() => setCreateMenuOpen(false)} onCreatePost={() => { setCreateMenuOpen(false); navigation.go(routes.createPost); }} reelsAvailable={false}/>
       {connectionsOpen && <ConnectionsModal viewerId={session.userId} profile={profile} activeTab={connectionTab} onTabChange={setConnectionTab} onClose={() => setConnectionsOpen(false)} onOpenProfile={async (userId) => { setConnectionsOpen(false); await openProfile(userId); }} onRelationshipRemoved={handleConnectionRemoved}/>}
-      {selectedStoryIndex !== null && activeStoryQueue[selectedStoryIndex] && <StoryViewer stories={activeStoryQueue} index={selectedStoryIndex} currentUserId={session.userId} onClose={() => { setSelectedStoryIndex(null); setStoryViewerStories(null); }} onSelectIndex={setSelectedStoryIndex} onViewed={handleStoryViewed} onDelete={handleDeleteStory} onOpenProfile={openProfile}/>}
-      {storyCreatorOpen && <StoryCreatorStudio userId={session.userId} initialDraft={resumeDraft?.draftType === "STORY" ? resumeDraft : null} onClose={() => { setStoryCreatorOpen(false); setResumeDraft(null); }} onDraftSaved={() => undefined} onPublished={() => loadScreenData("home", session.userId, feedTab)}/>}
+      {navigation.route.story && selectedStoryIndex === null && <div className="modal-backdrop" role="dialog" aria-modal="true"><section style={{ padding: 24, background: "var(--surface, white)", borderRadius: 16 }}><button onClick={navigation.closeResource}>Đóng</button>{storyRoute.error ? <div role="alert">Không thể tải Story.<button onClick={storyRoute.retry}>Thử lại</button></div> : <div role="status">Đang tải Story…</div>}</section></div>}
+      {selectedStoryIndex !== null && activeStoryQueue[selectedStoryIndex] && <StoryViewer stories={activeStoryQueue} index={selectedStoryIndex} currentUserId={session.userId} onClose={navigation.closeResource} onSelectIndex={selectStoryIndex} onViewed={handleStoryViewed} onDelete={handleDeleteStory} onOpenProfile={openProfile}/>}
+      {storyCreatorOpen && <StoryCreatorStudio userId={session.userId} initialDraft={resumeDraft?.draftType === "STORY" ? resumeDraft : null} onClose={() => { navigation.closeResource(); setResumeDraft(null); }} onDraftSaved={() => undefined} onPublished={() => loadScreenData("home", session.userId, feedTab)}/>}
+      {navigation.route.postId && !selectedPost && <div className="modal-backdrop post-detail-backdrop" role="dialog" aria-modal="true"><section className="post-route-state" style={{ padding: 24, background: "var(--surface, white)", borderRadius: 16 }}><button onClick={closePostDetail}>Đóng</button>{postRouteError ? <div role="alert"><strong>Bài viết không còn tồn tại hoặc bạn không có quyền xem.</strong><button onClick={retryPostRoute}>Thử lại</button></div> : <div role="status">Đang tải bài viết…</div>}</section></div>}
       {selectedPost && <PostDetail post={selectedPost} viewerId={session.userId} targetCommentId={targetCommentId} onClose={closePostDetail} onTogglePost={togglePost} onCommentCreated={incrementPostCommentCount} onEdit={() => setEditingPost(selectedPost)} onArchive={() => void handleArchivePost(selectedPost)} onOpenProfile={openProfile}/>}
       {editingPost && <PostEditDialog post={editingPost} userId={session.userId} onClose={() => setEditingPost(null)} onSaved={handlePostEdited}/>}
-      {viewportMode !== "mobile" && view !== "chat" && <FloatingMessenger userId={session.userId} compactLauncher={view !== "home"} onOpenFullChat={() => navigateToView("chat")} onOpenStory={openStoryFromReply} openConversationRequest={miniChatRequest}/>}
-    </>);
+      {viewportMode !== "mobile" && view !== "chat" && <FloatingMessenger userId={session.userId} compactLauncher={view !== "home"} onOpenFullChat={(id) => navigation.go(id ? routes.conversation(id) : routes.chat)} onOpenStory={openStoryFromReply} openConversationRequest={miniChatRequest}/>}
+    </PostInteractionProvider>);
 }

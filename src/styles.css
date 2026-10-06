@@ -21,3 +21,4 @@
 @import "./features/feed/styles/feed-profile-refinements.css";
 @import "./features/chat/styles/messaging-advanced.css";
 @import "./shared/styles/layout-regression-fixes.css";
+@import "./features/profile/styles/avatar-upload.css";

@@ -66,6 +66,28 @@ function controller(messages: ChatMessage[]): Controller {
 }
 
 describe("ChatMessageList", () => {
+  it.each([false, true])("keeps the reaction picker beside text, image, audio and reply bubbles and counts below (compact=%s)", (compact) => {
+    const text: ChatMessage = { ...message("10", "me"), reactions: [{ type: "HEART", count: 1 }] };
+    const audio: ChatMessage = { ...message("12", "other"), messageType: "AUDIO", metadata: { url: "https://host/audio.mp3" } };
+    const reply: ChatMessage = { ...message("13", "me"), replyToSeq: 10, reply: { messageSeq: 10, content: "quoted", messageType: "TEXT" } };
+    const current = controller([text, imageMessage("11", "me"), audio, reply]);
+    const select = vi.fn();
+    current.selectReaction = select;
+    render(<ChatMessageList controller={current} userId="me" compact={compact} onOpenMedia={vi.fn()} onOpenStory={vi.fn()} />);
+    const triggers = screen.getAllByRole("button", { name: "Chọn cảm xúc" });
+    expect(triggers).toHaveLength(4);
+    triggers.forEach((trigger) => {
+      expect(trigger.closest(".dm-bubble,.floating-bubble")).toBeNull();
+      expect(trigger.closest(".dm-message-actions")).not.toBeNull();
+      expect(trigger.closest(".chat-message-stack")).toBeNull();
+    });
+    const count = screen.getByRole("button", { name: "Xem 1 cảm xúc" });
+    expect(count.closest(".chat-message-stack")).not.toBeNull();
+    expect(count.closest(".dm-bubble,.floating-bubble,.dm-message-actions")).toBeNull();
+    fireEvent.click(triggers[2]);
+    fireEvent.click(screen.getByRole("button", { name: "Wow" }));
+    expect(select).toHaveBeenCalledWith("conversation-1", audio, "WOW");
+  });
   it("preserves outgoing and incoming alignment on both chat surfaces", () => {
     const messages = [message("1", "me"), message("2", "other")];
     const common = { controller: controller(messages), userId: "me", onOpenMedia: vi.fn(), onOpenStory: vi.fn() };

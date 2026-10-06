@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { API_BASE_URL } from "../../../shared/api";
+import { AVATAR_UPLOAD_RESULT_EVENT, isAvatarUploadResult, type AvatarUploadResult } from "../../profile/model/avatarUpload";
 import {
   MUSIC_FETCH_RESULT_EVENT,
   isMusicDto,
@@ -19,6 +20,7 @@ export type PostUploadEvent = ContentUploadResult;
 type PostEventStreamHandlers = {
   onUploadResult: (event: ContentUploadResult) => void;
   onMusicFetchResult?: (event: MusicFetchResult) => void;
+  onAvatarUploadResult?: (event: AvatarUploadResult) => void;
 };
 
 export function usePostEventStream(
@@ -54,6 +56,16 @@ export function usePostEventStream(
     };
     source.addEventListener("post_upload", forwardUploadResult("post"));
     source.addEventListener("story_upload_event", forwardUploadResult("story"));
+    source.addEventListener("avatar_upload_event", (event) => {
+      try {
+        const data: unknown = JSON.parse((event as MessageEvent).data);
+        if (!isAvatarUploadResult(data) || data.userId !== userId) return;
+        window.dispatchEvent(new CustomEvent<AvatarUploadResult>(AVATAR_UPLOAD_RESULT_EVENT, { detail: data }));
+        handlersRef.current.onAvatarUploadResult?.(data);
+      } catch {
+        // A malformed avatar event must not interrupt the shared connection.
+      }
+    });
     const forwardCommentResult = (event: Event) => {
       try {
         const data = JSON.parse((event as MessageEvent).data) as {

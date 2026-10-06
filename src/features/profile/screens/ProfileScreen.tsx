@@ -9,6 +9,7 @@ import type { Post } from "../../post";
 import type { Profile } from "../model/profile.types";
 import { ProfileRelationshipActions, type ProfileRelationship } from "../components/ProfileRelationshipActions";
 import { SimilarUsersSection, type SimilarUser } from "../components/SimilarUsersSection";
+import { AvatarUploader } from "../components/AvatarUploader";
 
 export type ConnectionTab = "FOLLOWERS" | "FOLLOWING" | "FRIENDS";
 export type ConnectionUserDto = { id: string; userId: string; username: string; displayName: string; avatarUrl?: string | null; mutualContext?: string | null; relationshipAction: string; viewerFollowsUser: boolean; userFollowsViewer: boolean; friend: boolean; followedAt?: string | null };
@@ -177,7 +178,7 @@ export function ProfileScreen({ viewerId, profile, onSelectPost, onOpenStoryHigh
     const visiblePosts = activeTab === "POSTS" ? profile.posts : profile.reposts;
     return <section className="screen profile-screen">
     <header className={`profile-header structured-profile-header ${density}`}>
-      <Avatar src={profile.avatarUrl} label={profile.username}/>
+      {ownProfile ? <AvatarUploader key={profile.id} userId={profile.id} avatarUrl={profile.avatarUrl} username={profile.username} onApproved={onRefresh}/> : <Avatar src={profile.avatarUrl} label={profile.username}/>}
       <div className="profile-identity-column">
         <div className="profile-identity-row"><div><h2>{profile.displayName}</h2><p>@{profile.username}</p></div>{ownProfile && <div className="profile-owner-actions"><button className="profile-edit-action" onClick={() => setEditorOpen(true)}><PenLine size={16}/> Chỉnh sửa thông tin</button><button className="profile-edit-action" onClick={onOpenArchive}><Archive size={16}/> Kho lưu trữ</button></div>}</div>
         {facts.length > 0 && <div className="profile-facts">{facts.map((fact, index) => { const Icon = fact.icon; return <div key={index}><Icon size={16} aria-hidden="true"/><span>{fact.content}</span></div>; })}</div>}

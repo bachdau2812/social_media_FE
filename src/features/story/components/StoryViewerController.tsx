@@ -1,6 +1,7 @@
 import { ChevronLeft, ChevronRight, MessageCircle, Users, X } from "lucide-react";
 import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useBodyScrollLock } from "../../../shared/overlays/useBodyScrollLock";
+import { routes } from "../../../app/router/routes";
 import { useStoryNavigation } from "../hooks/useStoryNavigation";
 import { useStoryPlayback } from "../hooks/useStoryPlayback";
 import { useStoryPreloader } from "../hooks/useStoryPreloader";
@@ -218,7 +219,7 @@ export function StoryViewerController({ stories, index, currentUserId, onClose, 
       {navigation.isPreparing && <div className="story-navigation-loading" aria-label="Preparing story"><span /></div>}
       {ownStory && <div className="story-stickers own-only"><button onClick={() => setViewersOpen(true)}><Users size={15} /> Viewers</button></div>}
       {playback.playBlocked && <button className="story-play-blocked" onClick={() => retryPlayback(muted)}>Tap to play</button>}
-      {ownStory && moreOpen && <div className="story-more-popover"><button onClick={() => { void navigator.clipboard?.writeText(`${window.location.origin}/stories/${current.id}`); setMoreOpen(false); }}>Copy link</button><button onClick={() => { setMoreOpen(false); setViewersOpen(true); }}>Story information</button><button className="danger" disabled={!onDelete} onClick={() => { setMoreOpen(false); if (onDelete) void onDelete(current.id); }}>Delete story</button></div>}
+      {ownStory && moreOpen && <div className="story-more-popover"><button onClick={() => { void navigator.clipboard?.writeText(`${window.location.origin}${routes.story(current.userId, current.id)}`); setMoreOpen(false); }}>Copy link</button><button onClick={() => { setMoreOpen(false); setViewersOpen(true); }}>Story information</button><button className="danger" disabled={!onDelete} onClick={() => { setMoreOpen(false); if (onDelete) void onDelete(current.id); }}>Delete story</button></div>}
       <StoryReplyComposer name={current.name} value={reply} permitted={replyPermitted} sending={replyPending} error={replyError} liked={liked} showLike={likePermitted} likePending={likePending} onChange={(value) => { setReplyDrafts((drafts) => ({ ...drafts, [current.id]: value })); setReplyErrors((errors) => ({ ...errors, [current.id]: null })); }} onLikedChange={() => void toggleStoryLike()} onFocusChange={setComposerFocused} onSubmit={(event) => void submitReply(event)} />
       {viewersOpen && ownStory && <StoryViewersPanel storyId={current.id} ownerId={currentUserId} onClose={() => setViewersOpen(false)} onOpenProfile={(userId) => { setViewersOpen(false); void onOpenProfile(userId); }} />}
     </StoryViewport>

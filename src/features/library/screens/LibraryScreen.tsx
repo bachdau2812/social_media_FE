@@ -1,5 +1,7 @@
 import { Archive, Bookmark, FileEdit, Image, RefreshCw, Trash2, Undo2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { nextScreenState, useScreenLocation } from "../../../app/router/ScreenLocation";
 import { libraryApi } from "../api/library.api";
 import type { ArchiveItem, ContentDraft, SavedPost, StoryArchiveItem } from "../model/library.types";
 import "./library-screen.css";
@@ -13,7 +15,16 @@ type Props = {
 };
 
 export function LibraryScreen({ userId, onOpenPost, onOpenStory, onResumeDraft }: Props) {
-  const [tab, setTab] = useState<Tab>("SAVED");
+  const location = useScreenLocation();
+  const navigate = useNavigate();
+  const params = new URLSearchParams(location.search);
+  const rawTab = params.get("tab")?.toUpperCase();
+  const tab: Tab = rawTab === "DRAFTS" || rawTab === "ARCHIVE" ? rawTab : "SAVED";
+  function setTab(value: Tab) {
+    const next = new URLSearchParams(params);
+    next.set("tab", value.toLowerCase());
+    if (value !== tab) navigate({ pathname: location.pathname, search: next.toString() }, { state: nextScreenState(location) });
+  }
   const [archiveType, setArchiveType] = useState<"POST" | "STORY">("POST");
   const [saved, setSaved] = useState<SavedPost[]>([]);
   const [drafts, setDrafts] = useState<ContentDraft[]>([]);

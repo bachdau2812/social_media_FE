@@ -43,6 +43,19 @@ function openThreadList() {
 }
 
 describe("FloatingMessenger conversation creation", () => {
+  it("uses the same unavailable-target and retry flow as full chat", () => {
+    const current = { ...controller, activeId: "missing", conversationState: "error", retryConversation: vi.fn(), closeConversation: vi.fn() };
+    vi.mocked(useChatController).mockReturnValue(current as unknown as ReturnType<typeof useChatController>);
+    const onOpenFullChat = vi.fn();
+    render(<FloatingMessenger userId="viewer-1" onOpenFullChat={onOpenFullChat} onOpenStory={vi.fn()} openConversationRequest={{ conversationId: "missing", nonce: 1 }} />);
+    fireEvent.click(screen.getByRole("button", { name: "Mở trang tin nhắn" }));
+    expect(onOpenFullChat).toHaveBeenCalledWith("missing");
+    expect(screen.getByRole("alert")).toHaveTextContent("Không thể mở cuộc trò chuyện.");
+    fireEvent.click(screen.getByText("Thử lại"));
+    expect(current.retryConversation).toHaveBeenCalled();
+    fireEvent.click(screen.getByText("Quay lại hộp thư"));
+    expect(current.closeConversation).toHaveBeenCalled();
+  });
   it("keeps only the compose action in the header", () => {
     const container = openThreadList();
 
