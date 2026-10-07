@@ -27,7 +27,10 @@
   --app-motion-normal: 240ms;
   --app-touch-target: 44px;
   --app-mobile-header-height: 56px;
-  --app-mobile-nav-height: 64px;
+  --app-mobile-nav-height: 56px;
+  --app-mobile-nav-gap: 8px;
+  --app-mobile-nav-inset: 12px;
+  --app-mobile-nav-footprint: calc(var(--app-mobile-nav-height) + var(--app-mobile-nav-gap) + var(--app-safe-bottom) + 12px);
   --app-safe-top: env(safe-area-inset-top, 0px);
   --app-safe-right: env(safe-area-inset-right, 0px);
   --app-safe-bottom: env(safe-area-inset-bottom, 0px);

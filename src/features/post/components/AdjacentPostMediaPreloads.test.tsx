@@ -11,6 +11,10 @@ const media: PostMedia[] = [
 ];
 
 describe("AdjacentPostMediaPreloads", () => {
+  it('does not request adjacent media when the feed frame is outside its preload neighborhood', () => {
+    const { container } = render(<AdjacentPostMediaPreloads media={media} activeIndex={1} enabled={false} />);
+    expect(container.querySelectorAll('video,img')).toHaveLength(0);
+  });
   it("warms only the immediately adjacent media without the active item", () => {
     const { container } = render(<AdjacentPostMediaPreloads media={media} activeIndex={1} />);
     const sources = [...container.querySelectorAll("video, img")].map((item) => item.getAttribute("src"));

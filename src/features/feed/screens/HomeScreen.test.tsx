@@ -2,6 +2,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Post } from "../../post";
 import { HomeScreen } from "./HomeScreen";
+import { useState } from 'react';
 
 afterEach(cleanup);
 
@@ -48,6 +49,15 @@ function renderHome(overrides: Partial<Parameters<typeof HomeScreen>[0]> = {}) {
 }
 
 describe("HomeScreen mobile structure", () => {
+  it('retains ready cards when refreshing the same tab', () => {
+    function RefreshFeed() {
+      const [status, setStatus] = useState<'ready' | 'loading'>('ready');
+      return <><button onClick={() => setStatus('loading')}>Refresh fixture</button><HomeScreen userId="v" tab="FRIENDS" setTab={vi.fn()} stories={[]} posts={[basePost({ caption: 'Stable refresh item' })]} status={status} hasMore={false} loadingMore={false} onLoadMore={vi.fn()} onSelectPost={vi.fn()} onCreateStory={vi.fn()} onSelectStory={vi.fn()} onTogglePost={vi.fn()} onEditPost={vi.fn()} onArchivePost={vi.fn()} onOpenProfile={vi.fn()} /></>;
+    }
+    render(<RefreshFeed />); fireEvent.click(screen.getByText('Refresh fixture'));
+    expect(screen.getAllByText('Stable refresh item').length).toBeGreaterThan(0);
+    expect(screen.queryByRole('status', { name: 'Loading feed' })).not.toBeInTheDocument();
+  });
   it("renders repost context before the original author and opens the reposter profile", async () => {
     const onOpenProfile = vi.fn().mockResolvedValue(undefined);
     const post = basePost({
@@ -89,14 +99,16 @@ describe("HomeScreen mobile structure", () => {
     expect(stories?.nextElementSibling).toBe(stickyTabs);
   });
 
-  it("keeps the current feed content mounted while a different tab is loading", () => {
+  it("shows loading instead of previous tab posts while the selected tab is loading", () => {
     renderHome({
       tab: "FRIENDS",
       posts: [basePost({ caption: "Existing feed item" })],
       status: "loading",
     });
 
-    expect(screen.getAllByText("Existing feed item").length).toBeGreaterThan(0);
-    expect(screen.queryByLabelText("Loading feed")).not.toBeInTheDocument();
+    expect(screen.queryAllByText("Existing feed item")).toHaveLength(0);
+    expect(screen.getByRole("status", { name: "Loading feed" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Friends" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.queryByText("Empty Friends feed")).not.toBeInTheDocument();
   });
 });

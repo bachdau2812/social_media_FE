@@ -9,5 +9,5 @@ export function ToggleRow({ label, detail, checked, onChange }: { label: string;
 }
 
 export function ChoiceRow({ label, value, options, onChange }: { label: string; value: string; options: Array<{ value: string; label: string }>; onChange: (value: string) => void }) {
-  return <div className="settings-feature-choice"><strong>{label}</strong><div>{options.map((option) => <button key={option.value} className={value === option.value ? "active" : ""} onClick={() => onChange(option.value)}>{option.label}</button>)}</div></div>;
+  return <div className="settings-feature-choice"><strong>{label}</strong><div>{options.map((option) => <button key={option.value} aria-pressed={value === option.value} className={value === option.value ? "active" : ""} onClick={() => onChange(option.value)}>{option.label}</button>)}</div></div>;
 }

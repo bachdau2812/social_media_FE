@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ChevronLeft, ChevronRight, GripVertical, ImagePlus, LoaderCircle, Pause, Play, RefreshCw, Trash2, X } from "lucide-react";
 import { formatVoiceDuration, type ChatImageDraft } from "../hooks/useChatMediaComposer";
+import { useBodyScrollLock } from "../../../shared/overlays/useBodyScrollLock";
 import { useForegroundOverlay } from "../../../shared/overlays/useForegroundOverlay";
 
 export type ChatDisplayMediaItem = {
@@ -95,11 +96,10 @@ function transformChatImageUrl(url: string, width: number) {
 export function ChatMediaViewer({ items, initialIndex, onClose }: { items: ChatViewerItem[]; initialIndex: number; onClose: () => void }) {
   // Shared viewer for full chat and mini-chat: covered feed posts cannot accrue dwell.
   useForegroundOverlay(items.length > 0);
+  useBodyScrollLock(items.length > 0);
   const [index, setIndex] = useState(Math.min(Math.max(initialIndex, 0), Math.max(0, items.length - 1)));
   const touchStartRef = useRef<number | null>(null);
   useEffect(() => {
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
     const keydown = (event: KeyboardEvent) => {
       if (event.key === "Escape") onClose();
       if (event.key === "ArrowLeft") setIndex((value) => Math.max(0, value - 1));
@@ -107,7 +107,6 @@ export function ChatMediaViewer({ items, initialIndex, onClose }: { items: ChatV
     };
     window.addEventListener("keydown", keydown);
     return () => {
-      document.body.style.overflow = previousOverflow;
       window.removeEventListener("keydown", keydown);
     };
   }, [items.length, onClose]);

@@ -5,12 +5,13 @@ import { MobileMoreMenu } from "./MobileMoreMenu";
 
 type MobileAppHeaderProps = {
   title: string;
+  subtitle?: string;
   canGoBack: boolean;
   onBack: () => void;
   onNavigate: (view: ViewKey) => void;
 };
 
-export function MobileAppHeader({ title, canGoBack, onBack, onNavigate }: MobileAppHeaderProps) {
+export function MobileAppHeader({ title, subtitle, canGoBack, onBack, onNavigate }: MobileAppHeaderProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -37,7 +38,7 @@ export function MobileAppHeader({ title, canGoBack, onBack, onNavigate }: Mobile
           <ChevronLeft size={24} aria-hidden="true" />
         </button>
       ) : <span className="mobile-header-action" aria-hidden="true" />}
-      <strong>{title}</strong>
+      <div className="mobile-header-title">{subtitle && <small>{subtitle}</small>}<strong>{title}</strong></div>
       <div className="mobile-more-anchor" ref={containerRef}>
         <button
           type="button"

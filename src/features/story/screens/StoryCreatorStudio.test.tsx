@@ -36,10 +36,25 @@ class AudioStub {
 }
 
 describe("StoryCreatorStudio", () => {
+  it('protects an unpublished Story on reload and permits explicit discard', async () => {
+    const onClose = vi.fn();
+    render(<StoryCreatorStudio userId="v" onClose={onClose} onPublished={vi.fn()} initialDraft={{ id: 'story-guard', draftType: 'STORY', payload: JSON.stringify([{ id: 'draft-media', secureUrl: '/draft.jpg', fileName: 'draft.jpg', mediaType: 'IMAGE' }]) }} />);
+    await waitFor(() => { const event = new Event('beforeunload', { cancelable: true }); window.dispatchEvent(event); expect(event.defaultPrevented).toBe(true); });
+    fireEvent.click(screen.getByRole('button', { name: 'Đóng trình tạo Story' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Bỏ bản nháp' }));
+    expect(onClose).toHaveBeenCalledOnce();
+    const event = new Event('beforeunload', { cancelable: true }); window.dispatchEvent(event); expect(event.defaultPrevented).toBe(false);
+  });
+  it('removes closed mobile editing tools from keyboard navigation', () => {
+    vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() })));
+    const { container } = render(<StoryCreatorStudio userId="v" onClose={vi.fn()} onPublished={vi.fn()} />);
+    expect(container.querySelector('#story-studio-tools')).toHaveAttribute('hidden');
+  });
   let toastMessages: string[];
   const captureToast = (event: Event) => toastMessages.push((event as CustomEvent<string>).detail);
 
   beforeEach(() => {
+    vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() })));
     AudioStub.instances = [];
     vi.stubGlobal("Audio", AudioStub);
     vi.mocked(apiGet).mockReset();

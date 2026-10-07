@@ -98,3 +98,10 @@ it("closes source media when the active conversation disappears after membership
   rerender(<ChatScreen {...props} />);
   expect(screen.queryByRole("dialog", { name: "Media viewer" })).not.toBeInTheDocument();
 });
+
+it("presents the conversation pane while its routed resource is pending", () => {
+  vi.mocked(useChatController).mockReturnValue({ ...controller, activeId: "pending", conversationState: "loading" } as never);
+  const { container } = render(<ChatScreen userId="me" username="me" onOpenProfile={vi.fn()} onOpenStory={vi.fn()} initialTarget={{ conversationId: "pending" }} />);
+  expect(container.querySelector(".direct-messaging-page")).toHaveClass("pane-conversation");
+  expect(screen.getByRole("status")).toBeInTheDocument();
+});

@@ -1,6 +1,6 @@
 import { MessageCircle, RefreshCw, UserPlus, Users, X } from "lucide-react";
 import { useState } from "react";
-import { Avatar, EmptyState, ErrorState } from "../../../shared/components";
+import { Avatar, EmptyState, ErrorState, Spinner } from "../../../shared/components";
 import { useSuggestedFriendsController } from "../hooks/useSuggestedFriendsController";
 import "./suggested-friends.css";
 
@@ -16,7 +16,7 @@ export function SuggestedFriendsPanel({ viewerId, onOpenProfile, onOpenChat }: {
     <section className="suggested-friends-panel">
       <header><div><strong>Gợi ý cho bạn</strong><span>Dựa trên hồ sơ và kết nối chung</span></div><button type="button" onClick={() => void refresh()} aria-label="Làm mới gợi ý"><RefreshCw size={17} /></button></header>
       {actionError && <div role="alert">{actionError}</div>}
-      {state === "loading" ? <div className="suggestion-skeleton">{[0, 1, 2].map((item) => <i key={item} />)}</div> : null}
+      {state === "loading" ? <div className="suggestion-loading"><Spinner label="Đang tải gợi ý bạn bè" /></div> : null}
       {state === "error" ? <ErrorState message="Không thể tải gợi ý" onRetry={() => void refresh()} /> : null}
       {state === "ready" && users.length === 0 ? <EmptyState title="Chưa có gợi ý phù hợp" /> : null}
       {state === "ready" && users.length ? <div className="suggested-friends-list">{users.slice(0, 5).map((user) => <article key={user.userId}>

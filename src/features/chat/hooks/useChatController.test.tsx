@@ -62,15 +62,15 @@ function deferred<T>() {
   return { promise, resolve, reject };
 }
 
-function thread(id: string): ConversationDto {
+function thread(id: string, lastMessageSeq = 1): ConversationDto {
   return {
     id,
     type: "DIRECT",
     isDissolved: false,
     title: id,
     avatarUrl: null,
-    lastMessageSeq: 0,
-    lastMessageId: null,
+    lastMessageSeq,
+    lastMessageId: lastMessageSeq > 0 ? `message-${id}` : null,
     lastMessageAt: null,
     lastMessageSenderId: null,
     lastMessageType: null,
@@ -148,6 +148,75 @@ describe("useChatController message requests", () => {
   function membership(type: "MEMBER_REMOVED" | "MEMBER_ADDED", conversationId = "a"): ChatRealtimeEvent {
     return { type, eventId: type, conversationId, actorId: "admin", targetUserId: "viewer-1", recipientIds: ["viewer-1"] };
   }
+  it("hides empty direct and group conversations from the shared inbox", async () => {
+    chatApi.conversations.mockResolvedValue({ items: [
+      thread("empty-direct", 0), { ...thread("empty-group", 0), type: "GROUP" },
+      { ...thread("populated"), lastMessageSeq: 1, lastMessageId: "message-1" },
+    ], hasMore: false, nextCursor: null });
+    const { result } = renderHook(() => useChatController("viewer-1", null));
+
+    await waitFor(() => expect(result.current.threadState).toBe("ready"));
+
+    expect(result.current.threads.map((item) => item.id)).toEqual(["populated"]);
+  });
+
+  it("opens an empty conversation for composition and adds it to the inbox after its first message", async () => {
+    chatApi.conversations.mockResolvedValue({ items: [], hasMore: false, nextCursor: null });
+    chatApi.conversation.mockResolvedValue(thread("draft", 0));
+    chatApi.messages.mockResolvedValue({ items: [], hasMore: false, nextCursor: null });
+    const { result } = renderHook(() => useChatController("viewer-1", { conversationId: "draft" }));
+    await waitFor(() => expect(result.current.active?.id).toBe("draft"));
+    await waitFor(() => expect(result.current.messageState).toBe("ready"));
+    expect(result.current.threads).toEqual([]);
+
+    emit({ type: "MESSAGE_CREATED", eventId: "first", conversationId: "draft", actorId: "other",
+      recipientIds: ["viewer-1"], message: { ...messagePage("draft").items[0], clientMessageId: undefined } });
+
+    expect(result.current.threads.map((item) => item.id)).toEqual(["draft"]);
+    expect(result.current.active?.lastMessageSeq).toBe(1);
+  });
+
+  it("keeps an empty conversation out of the inbox when its first send fails", async () => {
+    chatApi.conversations.mockResolvedValue({ items: [], hasMore: false, nextCursor: null });
+    chatApi.conversation.mockResolvedValue(thread("draft", 0));
+    chatApi.messages.mockResolvedValue({ items: [], hasMore: false, nextCursor: null });
+    chatApi.details.mockResolvedValue({ members: [{ userId: "viewer-1" }, { userId: "other" }] });
+    chatApi.send.mockRejectedValue(new Error("send failed"));
+    const { result } = renderHook(() => useChatController("viewer-1", { conversationId: "draft" }));
+    await waitFor(() => expect(result.current.messageState).toBe("ready"));
+    act(() => result.current.setDraft("hello"));
+
+    await act(async () => result.current.send());
+
+    expect(result.current.active?.id).toBe("draft");
+    expect(result.current.threads).toEqual([]);
+    expect(result.current.draft).toBe("hello");
+    expect(result.current.sendError).toBeTruthy();
+    expect(chatRealtime.publishLocalMessage).not.toHaveBeenCalled();
+  });
+
+  it("adds the first successfully sent message to the shared inbox through the local event", async () => {
+    chatApi.conversations.mockResolvedValue({ items: [], hasMore: false, nextCursor: null });
+    chatApi.conversation.mockResolvedValue(thread("draft", 0));
+    chatApi.messages.mockResolvedValue({ items: [], hasMore: false, nextCursor: null });
+    chatApi.details.mockResolvedValue({ members: [{ userId: "viewer-1" }, { userId: "other" }] });
+    const sent = { ...messagePage("draft").items[0], senderId: "viewer-1", content: "hello" };
+    chatApi.send.mockResolvedValue(sent);
+    chatRealtime.publishLocalMessage.mockImplementationOnce(() => {
+      const calls = chatRealtime.subscribe.mock.calls;
+      calls[calls.length - 1]?.[1]({ type: "MESSAGE_CREATED", eventId: "local-first", conversationId: "draft",
+        actorId: "viewer-1", recipientIds: ["other"], message: { ...sent, clientMessageId: undefined } });
+    });
+    const { result } = renderHook(() => useChatController("viewer-1", { conversationId: "draft" }));
+    await waitFor(() => expect(result.current.messageState).toBe("ready"));
+    act(() => result.current.setDraft("hello"));
+
+    await act(async () => result.current.send());
+
+    expect(result.current.threads).toHaveLength(1);
+    expect(result.current.threads[0]).toMatchObject({ id: "draft", lastMessageSeq: 1, preview: "Bạn: hello", unreadCount: 0 });
+  });
+
   it("loads the next inbox cursor while retaining conversations already loaded", async () => {
     chatApi.conversations
       .mockResolvedValueOnce({ items: [thread("first")], hasMore: true, nextCursor: "inbox-next" })
@@ -423,7 +492,7 @@ describe("useChatController message requests", () => {
   });
   it("refetches the server summary when a recalled creation's sequence was never observed", async () => {
     const recalled = { ...thread("a"), lastMessageSeq: 1, lastMessageId: "recalled", lastMessagePreview: "Recalled", unreadCount: 1 };
-    chatApi.conversations.mockResolvedValueOnce({ items: [thread("a")] }).mockResolvedValueOnce({ items: [recalled] });
+    chatApi.conversations.mockResolvedValueOnce({ items: [thread("a", 0)] }).mockResolvedValueOnce({ items: [recalled] });
     const { result } = renderHook(() => useChatController("viewer-1", null));
     await waitFor(() => expect(result.current.threadState).toBe("ready"));
     const delivered = chatRealtime.acknowledgeDelivered.mock.calls.length, read = chatRealtime.acknowledgeRead.mock.calls.length;

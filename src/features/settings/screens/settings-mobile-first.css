@@ -3,6 +3,9 @@
 .settings-mobile-detail-header { display: none; }
 
 @media (max-width: 767px) {
+  .settings-feature.shell-header-owned .settings-feature-title > div,
+  .settings-feature.shell-header-owned .settings-mobile-detail-header { display: none; }
+  .settings-feature.shell-header-owned .settings-feature-title { border: 0; padding: 0; }
   .settings-feature-layout > main { display: none; }
   .settings-feature-layout.detail-open > nav { display: none; }
   .settings-feature-layout.detail-open > main { display: block; }

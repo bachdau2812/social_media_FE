@@ -56,6 +56,23 @@ function home(postId: string, feedEntryId?: string, hasMore = false): HomeScreen
 afterEach(() => apiGet.mockReset());
 
 describe("useFeedController", () => {
+  it("preserves cached posts when invalidating a pending tab request", async () => {
+    const pending = deferred<HomeScreenPayload>();
+    apiGet.mockResolvedValueOnce(home("cached-discovery"));
+    const { result } = renderHook(() => useFeedController());
+    await act(async () => { await result.current.load("viewer-1", "DISCOVER"); });
+    let signal: AbortSignal | undefined;
+    apiGet.mockImplementationOnce((_path: string, options?: { signal?: AbortSignal }) => {
+      signal = options?.signal;
+      return pending.promise;
+    });
+    let pendingLoad!: Promise<void>;
+    act(() => { pendingLoad = result.current.load("viewer-1", "FRIENDS"); });
+    act(() => result.current.invalidate());
+    expect(signal?.aborted).toBe(true);
+    await act(async () => { pending.resolve(home("stale-friends")); await pendingLoad; });
+    expect(result.current.posts.map((post) => post.id)).toEqual(["cached-discovery"]);
+  });
   it("keeps separate repost entries for one post and deduplicates by feed entry ID", async () => {
     apiGet
       .mockResolvedValueOnce(home("post-1", "repost-1", true))

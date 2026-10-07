@@ -2,9 +2,29 @@
 
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { uploadCloudinaryMedia } from "../../../shared/api";
 import { MUSIC_FETCH_RESULT_EVENT, type MusicDto } from "../../../shared/music";
 import { APP_TOAST_EVENT } from "../../../shared/notifications/appToast";
 import { PostCreationStudio } from "./PostCreationStudio";
+
+it('protects a restored unsaved post on reload and permits explicit discard', async () => {
+  const onClose = vi.fn();
+  render(<PostCreationStudio userId="v" onBack={vi.fn()} onClose={onClose} onDraftSaved={vi.fn()} onSaveDraft={vi.fn(async () => undefined)} onPublished={vi.fn()} initialDraft={{ id: 'guard-draft', draftType: 'POST', payload: JSON.stringify({ caption: 'Unsaved caption' }) }} />);
+  await waitFor(() => { const event = new Event('beforeunload', { cancelable: true }); window.dispatchEvent(event); expect(event.defaultPrevented).toBe(true); });
+  fireEvent.click(screen.getByRole('button', { name: 'Close create' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Discard' }));
+  expect(onClose).toHaveBeenCalledOnce();
+  const event = new Event('beforeunload', { cancelable: true }); window.dispatchEvent(event); expect(event.defaultPrevented).toBe(false);
+});
+it('keeps the post editor open when Save draft fails during dismissal', async () => {
+  const onClose = vi.fn(); const onSaveDraft = vi.fn(async () => { throw new Error('offline'); });
+  render(<PostCreationStudio userId="v" onBack={vi.fn()} onClose={onClose} onDraftSaved={vi.fn()} onSaveDraft={onSaveDraft} onPublished={vi.fn()} initialDraft={{ id: 'failed-save', draftType: 'POST', payload: JSON.stringify({ caption: 'Unsaved caption' }) }} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Close create' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
+  await waitFor(() => expect(onSaveDraft).toHaveBeenCalled());
+  await new Promise(resolve => setTimeout(resolve, 0));
+  expect(onClose).not.toHaveBeenCalled();
+});
 
 const apiGet = vi.fn();
 const apiSend = vi.fn();
@@ -38,6 +58,7 @@ const ready = track("3n3Ppam7vgaVa1iaRUc9Lp", "Ready Song", true);
 
 let toastMessages: string[] = [];
 const captureToast = (event: Event) => toastMessages.push((event as CustomEvent<string>).detail);
+const pendingModerationMessage = "Bài viết đã được gửi và đang chờ kiểm duyệt.";
 
 afterEach(() => {
   window.removeEventListener(APP_TOAST_EVENT, captureToast);
@@ -47,6 +68,15 @@ afterEach(() => {
 beforeEach(() => {
   apiGet.mockReset();
   apiSend.mockReset();
+  vi.mocked(uploadCloudinaryMedia).mockReset();
+  vi.mocked(uploadCloudinaryMedia).mockResolvedValue({
+    secureUrl: "https://host/photo.jpg",
+    publicId: "post/photo",
+    resourceType: "image",
+    bytes: 10,
+    fileName: "photo.jpg",
+    mimeType: "image/jpeg",
+  });
   toastMessages = [];
   window.addEventListener(APP_TOAST_EVENT, captureToast);
   apiGet.mockResolvedValue({ content: [unfetched, failed, ready], pageNumber: 0, totalPages: 1 });
@@ -129,7 +159,7 @@ describe("PostCreationStudio Spotify fetch", () => {
     fireEvent.click(screen.getByRole("button", { name: "Publish" }));
 
     await waitFor(() => expect(onPublished).toHaveBeenCalledOnce());
-    expect(toastMessages).toContain("Post is being reviewed");
+    expect(toastMessages).toContain(pendingModerationMessage);
     expect(onClose).toHaveBeenCalledOnce();
     unmount();
 
@@ -141,6 +171,41 @@ describe("PostCreationStudio Spotify fetch", () => {
     fireEvent.click(screen.getByRole("button", { name: "Publish" }));
 
     await waitFor(() => expect(toastMessages).toContain("Backend unavailable"));
+  });
+
+  it("shows a moderation-pending message after uploading media and submitting the post", async () => {
+    const file = new File(["image bytes"], "photo.jpg", { type: "image/jpeg" });
+    apiSend.mockResolvedValueOnce({ postId: "post-1", message: "Bài viết mất một chút thời gian để tải lên, vui lòng đợi" });
+    const { container } = render(<PostCreationStudio
+      userId="user-1"
+      onBack={vi.fn()}
+      onClose={vi.fn()}
+      onDraftSaved={vi.fn()}
+      onSaveDraft={async () => {}}
+      onPublished={vi.fn()}
+      initialDraft={null}
+    />);
+
+    const input = container.querySelector<HTMLInputElement>(".media-file-input");
+    expect(input).not.toBeNull();
+    fireEvent.change(input!, { target: { files: [file] } });
+    await waitFor(() => expect(screen.getByRole("button", { name: "Next" })).toBeEnabled());
+    for (let step = 1; step < 4; step += 1) {
+      fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    }
+    await screen.findByRole("heading", { name: "Review and publish" });
+    fireEvent.click(screen.getByRole("button", { name: "Publish" }));
+
+    await waitFor(() => expect(toastMessages).toContain(pendingModerationMessage));
+    expect(uploadCloudinaryMedia).toHaveBeenCalledWith(file);
+    expect(apiSend).toHaveBeenCalledWith("/posts", "POST", expect.objectContaining({
+      content: "",
+      items: [expect.objectContaining({
+        secureUrl: "https://host/photo.jpg",
+        publicId: "post/photo",
+        resourceType: "image",
+      })],
+    }));
   });
 
   it("delegates draft persistence through its application adapter", async () => {

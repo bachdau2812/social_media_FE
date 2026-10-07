@@ -4,7 +4,7 @@ import { useScreenLocation } from "../../../app/router/ScreenLocation";
 import type { Post } from "../../post";
 import { postApi, postDetailsToPost } from "../../post";
 import { searchApi } from "../api/search.api";
-import { SearchWorkspace, type PostSearchResult, type UserSearchResult } from "../components/SearchWorkspace";
+import { SearchWorkspace, type PostSearchResult, type UserSearchResult, type SearchLoadArgs, type SearchPage } from "../components/SearchWorkspace";
 import { searchPostToResult, searchUserToResult } from "../model/search.mapper";
 
 export function SearchScreen({ viewerId, onSelectPost, onOpenProfile }: {
@@ -23,19 +23,19 @@ export function SearchScreen({ viewerId, onSelectPost, onOpenProfile }: {
     navigate({ pathname: location.pathname, search: next.toString() }, { replace: true, state: location.state });
   }
 
-  const loadUsers = useCallback(async ({ query: keyword, signal }: { query: string; signal: AbortSignal }): Promise<UserSearchResult[]> => {
-    const page = await searchApi.users(viewerId, keyword, signal);
-    return (page.content ?? []).filter((item) => item.userId !== viewerId).map(searchUserToResult);
+  const loadUsers = useCallback(async ({ query: keyword, signal, page = 0 }: SearchLoadArgs): Promise<SearchPage<UserSearchResult>> => {
+    const result = await searchApi.users(viewerId, keyword, signal, page);
+    return { content: (result.content ?? []).filter((item) => item.userId !== viewerId).map(searchUserToResult), hasMore: page + 1 < result.totalPages };
   }, [viewerId]);
 
-  const loadPosts = useCallback(async ({ query: keyword, signal }: { query: string; signal: AbortSignal }): Promise<PostSearchResult[]> => {
-    const page = await searchApi.posts(keyword, signal);
-    return (page.content ?? []).map(searchPostToResult);
+  const loadPosts = useCallback(async ({ query: keyword, signal, page = 0 }: SearchLoadArgs): Promise<SearchPage<PostSearchResult>> => {
+    const result = await searchApi.posts(keyword, signal, page);
+    return { content: (result.content ?? []).map(searchPostToResult), hasMore: page + 1 < result.totalPages };
   }, []);
 
   async function openPost(result: PostSearchResult) {
     try {
-      const details = await postApi.getDetail(result.id);
+      const details = await postApi.getSurfaceDetail(result.id);
       onSelectPost(postDetailsToPost(details));
     } catch {
       window.dispatchEvent(new CustomEvent("app-toast", { detail: "Không thể mở bài viết này" }));

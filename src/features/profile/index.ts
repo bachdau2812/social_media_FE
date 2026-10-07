@@ -9,4 +9,6 @@ export { profileToIdentity, profileToView } from "./model/profile.mapper";
 export type * from "./model/profile.dto";
 export type * from "./model/profile.types";
 export { useProfileController } from "./hooks/useProfileController";
+export { useProfilePostCollection } from "./hooks/useProfilePostCollection";
+export { ProfileFeedScreen } from "./screens/ProfileFeedScreen";
 export { applyConnectionRemoval } from "./model/profileConnections";

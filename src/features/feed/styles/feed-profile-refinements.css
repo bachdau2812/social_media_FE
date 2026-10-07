@@ -92,6 +92,9 @@
 .post-content .feed-caption .text-action {
   white-space: nowrap;
 }
+@media (max-width: 767px) {
+  .post-content .feed-caption.expanded { max-height: none; overflow: visible; padding-right: 0; }
+}
 
 .post-media-frame .feed-item-caption p {
   overflow-wrap: anywhere;
@@ -116,7 +119,7 @@
 
 @media (max-width: 560px) {
   .post-content .feed-caption.expanded {
-    max-height: 220px;
+    max-height: none;
   }
 
   .post-media-frame .feed-item-caption.long:hover,
@@ -367,7 +370,7 @@
   .profile-facts > div:nth-child(n+4) { display: none; }
   .profile-hobbies > div { max-height: 68px; }
   .profile-hobbies span:nth-of-type(n+5) { display: none; }
-  .profile-social-links a span { display: none; }
+  .profile-social-links a { min-height: 40px; }
   .structured-profile-header .metrics { grid-column: 1 / -1; justify-content: space-around; border-top: 1px solid #ececea; padding-top: 12px; }
   .profile-info-backdrop { padding: 0; align-items: end; }
   .profile-about-panel,
@@ -665,4 +668,27 @@
   .story-scroll-button { top: 39px; width: 28px; height: 28px; opacity: 0.62; }
   .story-scroll-button.previous { left: 6px; }
   .story-scroll-button.next { right: 6px; }
+}
+
+
+/* Home separators belong to the Discover/Friends switch, not the Story rail. */
+.home-stories .story-strip { border-bottom: 0; padding-bottom: 8px; }
+.home-sticky {
+  margin-top: 4px;
+  gap: 0;
+  border-top: 1px solid #e7e7e4;
+  border-bottom: 1px solid #e7e7e4;
+}
+.home-sticky .feed-tabs {
+  margin-bottom: 0;
+  padding-block: 4px;
+  border-bottom: 0;
+}
+.home-sticky .feed-tabs button,
+.home-sticky .feed-tabs button.active { border-bottom: 0; }
+@media (max-width: 767px) {
+  .home-stories .story-strip { padding-bottom: 8px; }
+  .home-sticky { margin-top: 4px; padding-top: 2px; }
+  .home-sticky .feed-tabs { padding-block: 2px; }
+  .post-stack { padding-top: 8px; }
 }

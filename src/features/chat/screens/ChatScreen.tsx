@@ -61,7 +61,7 @@ export function ChatScreen({ userId, username, onOpenProfile, onOpenStory, initi
     else controller.closeConversation();
   }
 
-  return <section className={`direct-messaging-page ${controller.active ? "pane-conversation" : "pane-inbox"}`}>
+  return <section className={`direct-messaging-page ${controller.activeId || targetId ? "pane-conversation" : "pane-inbox"}`}>
     <aside className="dm-sidebar">
       <header className="dm-sidebar-header">
         <div className="dm-account-switch"><span><strong>{username}</strong></span></div>

@@ -10,7 +10,7 @@ export function profileToIdentity(data: ProfileDto) {
   };
 }
 
-function profilePostToPost(item: ProfilePostDto): Post {
+export function profilePostToPost(item: ProfilePostDto): Post {
   const media = postItemDtosToMedia(item.postId, item.firstItem ? [item.firstItem] : []);
   const username = item.authorUsername?.trim() || "";
   return {
@@ -37,7 +37,7 @@ function profilePostToPost(item: ProfilePostDto): Post {
     },
     viewerState: {
       liked: item.likedByCurrentUser,
-      saved: false,
+      saved: item.savedByCurrentUser ?? false,
       reposted: item.repostedByCurrentUser,
     },
     comments: [],

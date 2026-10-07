@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -67,12 +67,30 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  cleanup();
   reportFeedMusicVisibility("post-video", 0);
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
 
 describe("Post video playback", () => {
+  it("uses discussion presentation without mounting the post media viewer", async () => {
+    const { container } = render(<PostDetail post={videoPost()} viewerId="viewer-1" presentation="discussion" onClose={vi.fn()} onTogglePost={vi.fn()} onCommentCreated={vi.fn()} onEdit={vi.fn()} onArchive={vi.fn()} onOpenProfile={vi.fn(async () => undefined)} />);
+    expect(screen.getByRole('dialog', { name: 'Comments' })).toBeInTheDocument();
+    expect(container.querySelector('.detail-media-viewer')).toBeNull();
+    expect(container.querySelector('textarea')).not.toBeNull();
+  });
+  it("swipes feed media without opening the post and leaves vertical gestures alone", () => {
+    const onOpen = vi.fn();
+    const { container } = render(<PostCard post={videoPost(2)} index={1} viewerId="viewer-1" onOpen={onOpen} onToggle={vi.fn()} onEdit={vi.fn()} onArchive={vi.fn(async () => undefined)} onOpenProfile={vi.fn(async () => undefined)} />);
+    const stage = container.querySelector('.feed-media-stage')!;
+    fireEvent.touchStart(stage, { touches: [{ clientX: 180, clientY: 50 }] });
+    fireEvent.touchMove(stage, { touches: [{ clientX: 80, clientY: 55 }] });
+    fireEvent.touchEnd(stage, { changedTouches: [{ clientX: 80, clientY: 55 }] });
+    fireEvent.click(stage);
+    expect(container.querySelector('.media-counter')).toHaveTextContent('02 / 02');
+    expect(onOpen).not.toHaveBeenCalled();
+  });
   it("centers a fitted detail video inside its full-size player wrapper", () => {
     expect(postMediaCss).toMatch(
       /\.detail-media-content \.post-video-player\s*\{[^}]*display:\s*grid;[^}]*place-items:\s*center;/s,

@@ -82,11 +82,11 @@ describe("StoryViewer", () => {
     const { container } = render(<StoryViewer stories={stories} index={1} currentUserId="me" onClose={vi.fn()} onSelectIndex={onSelectIndex} onViewed={vi.fn()} onOpenProfile={vi.fn().mockResolvedValue(undefined)} />);
 
     expect(container.querySelectorAll(".story-slide")).toHaveLength(3);
-    expect(container.querySelector(".author-button strong")).toHaveTextContent("Name b");
+    expect(container.querySelector(".story-header-nickname")).toHaveTextContent("user_b");
     fireEvent.click(container.querySelector(".story-external-arrow.next")!);
     await waitFor(() => expect(container.querySelector(".story-track")).toHaveClass("is-animating"));
     expect(onSelectIndex).not.toHaveBeenCalled();
-    expect(container.querySelector(".author-button strong")).toHaveTextContent("Name b");
+    expect(container.querySelector(".story-header-nickname")).toHaveTextContent("user_b");
 
     fireEvent.transitionEnd(container.querySelector(".story-track")!, { propertyName: "transform" });
     expect(onSelectIndex).toHaveBeenCalledWith(2);
@@ -112,7 +112,7 @@ describe("StoryViewer", () => {
     await waitFor(() => expect(container.querySelector(".story-track")).toHaveClass("is-animating"));
 
     expect(progressSegments()[1]).toHaveClass("active");
-    expect(container.querySelector(".author-button strong")).toHaveTextContent("Name a");
+    expect(container.querySelector(".story-header-nickname")).toHaveTextContent("user_a");
   });
 
   it("shows the three-dot menu trigger only for the current user's story", () => {
@@ -156,7 +156,7 @@ describe("StoryViewer", () => {
     expect(capture).not.toHaveBeenCalled();
 
     rerender(<StoryViewer stories={[story("mine", "me")]} index={0} currentUserId="me" onClose={vi.fn()} onSelectIndex={vi.fn()} onViewed={vi.fn()} onOpenProfile={vi.fn().mockResolvedValue(undefined)} />);
-    fireEvent.pointerDown(screen.getByRole("button", { name: /Viewers/i }), { pointerId: 2, button: 0 });
+    fireEvent.pointerDown(screen.getByRole("button", { name: "Xem người xem" }), { pointerId: 2, button: 0 });
     expect(capture).not.toHaveBeenCalled();
 
     fireEvent.pointerDown(viewport, { pointerId: 3, button: 0 });
@@ -219,10 +219,26 @@ describe("StoryViewer", () => {
     await waitFor(() => expect(input).toHaveValue(""));
   });
 
-  it("disables replies on the current user's own Story", () => {
+  it("does not render a reply composer on the current user's own Story", () => {
     render(<StoryViewer stories={[story("own-reply", "me")]} index={0} currentUserId="me" onClose={vi.fn()} onSelectIndex={vi.fn()} onViewed={vi.fn()} onOpenProfile={vi.fn().mockResolvedValue(undefined)} />);
 
-    expect(screen.getByRole("textbox")).toBeDisabled();
+    expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+  });
+
+  it("pauses playback while the owner viewers sheet is open and resumes when it closes", async () => {
+    vi.spyOn(storyApi, "viewers").mockResolvedValue({ content: [], pageNumber: 0, totalElements: 7, totalPages: 1 });
+    const { container } = render(<StoryViewer stories={[story("mine", "me")]} index={0} currentUserId="me" onClose={vi.fn()} onSelectIndex={vi.fn()} onViewed={vi.fn()} onOpenProfile={vi.fn().mockResolvedValue(undefined)} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Xem người xem" }));
+    expect(screen.getByRole("dialog", { name: "Danh sách người xem Story" })).toBeInTheDocument();
+    expect(container.querySelector(".story-viewer")).toHaveClass("paused");
+    const viewersSheet = screen.getByRole("dialog", { name: "Danh sách người xem Story" });
+    expect(await within(viewersSheet).findByText(/7\s*lượt xem/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Xem người xem" })).toHaveTextContent("7 lượt xem");
+
+    fireEvent.click(screen.getByRole("button", { name: "Đóng danh sách người xem" }));
+    expect(container.querySelector(".story-viewer")).not.toHaveClass("paused");
+    await waitFor(() => expect(storyApi.viewers).toHaveBeenCalledWith("mine", "me", 0, 20));
   });
 
   it("renders a stable unavailable frame for an expired single-Story destination", () => {

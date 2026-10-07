@@ -150,9 +150,14 @@ function Bubble({ message, controller, userId, compact, latestOutgoing, onOpenMe
 
 export function ChatMessageList({ controller, userId, compact = false, onOpenMedia, onOpenStory }: Props) {
   const listRef = useRef<HTMLDivElement | null>(null);
+  const contentRef = useRef<HTMLDivElement | null>(null);
+  const anchorRef = useRef<{ seq: string; offset: number } | null>(null);
+  const [newMessages, setNewMessages] = useState(false);
   const initializedRef = useRef<string | null>(null);
   const nearBottomRef = useRef(true);
   const messages = controller.activeMessages;
+  const tailId = messages[messages.length - 1]?.id;
+  const previousTailRef = useRef<{ id: string | undefined; count: number }>({ id: undefined, count: 0 });
   const latestOutgoing = useMemo(() => [...messages].reverse().find((message) => message.senderId === userId)?.messageSeq, [messages, userId]);
 
   useLayoutEffect(() => {
@@ -162,14 +167,45 @@ export function ChatMessageList({ controller, userId, compact = false, onOpenMed
       list.scrollTop = list.scrollHeight;
       initializedRef.current = controller.activeId;
       nearBottomRef.current = true;
+      setNewMessages(false);
+      anchorRef.current = null;
     }
   }, [controller.activeId, controller.messageState]);
 
   useEffect(() => {
     const list = listRef.current;
-    if (!list || !nearBottomRef.current) return;
+    const tail = tailId;
+    const previous = previousTailRef.current;
+    const newTail = previous.id !== undefined && previous.id !== tail && messages.length > previous.count;
+    previousTailRef.current = { id: tail, count: messages.length };
+    if (!list) return;
+    if (!nearBottomRef.current) { if (newTail) setNewMessages(true); return; }
     list.scrollTop = list.scrollHeight;
-  }, [messages.length]);
+  }, [messages.length, tailId]);
+
+  function rememberAnchor() {
+    const list = listRef.current;
+    if (!list) return;
+    const edge = list.getBoundingClientRect().top;
+    const row = [...list.querySelectorAll<HTMLElement>("[data-chat-seq]")].find(item => item.getBoundingClientRect().bottom > edge);
+    anchorRef.current = row ? { seq: row.dataset.chatSeq!, offset: row.getBoundingClientRect().top - edge } : null;
+  }
+  useEffect(() => {
+    const list = listRef.current;
+    if (!list || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(() => {
+      if (nearBottomRef.current) list.scrollTop = list.scrollHeight;
+      else {
+        const anchor = anchorRef.current;
+        const row = anchor && list.querySelector<HTMLElement>(`[data-chat-seq="${anchor.seq}"]`);
+        if (row && anchor) list.scrollTop += row.getBoundingClientRect().top - list.getBoundingClientRect().top - anchor.offset;
+      }
+      rememberAnchor();
+    });
+    observer.observe(list);
+    if (contentRef.current) observer.observe(contentRef.current);
+    return () => observer.disconnect();
+  }, [controller.activeId, controller.messageState]);
 
   useEffect(() => {
     if (controller.highlightedSeq == null) return;
@@ -183,6 +219,8 @@ export function ChatMessageList({ controller, userId, compact = false, onOpenMed
     const list = listRef.current;
     if (!list) return;
     nearBottomRef.current = list.scrollHeight - list.scrollTop - list.clientHeight < 72;
+    if (nearBottomRef.current) setNewMessages(false);
+    rememberAnchor();
     if (list.scrollTop > 56 || !controller.hasMore || controller.loadingOlder) return;
     const beforeHeight = list.scrollHeight;
     const beforeTop = list.scrollTop;
@@ -196,6 +234,8 @@ export function ChatMessageList({ controller, userId, compact = false, onOpenMed
   if (controller.messageState === "error" && !messages.length) return <div className="chat-state"><strong>Không thể tải tin nhắn</strong><button type="button" onClick={() => controller.activeId && void controller.loadMessages(controller.activeId)}>Thử lại</button></div>;
 
   return <div ref={listRef} className={compact ? "floating-message-stream" : "dm-message-history"} onScroll={() => void onScroll()}>
+    {newMessages && <button type="button" className="chat-new-messages" onClick={() => { const list = listRef.current; if (list) list.scrollTop = list.scrollHeight; nearBottomRef.current = true; setNewMessages(false); }}>Tin nhắn mới</button>}
+    <div ref={contentRef} className="chat-history-content">
     {controller.loadingOlder && <span className={`chat-history-page-loader ${compact ? "compact" : ""}`}>Đang tải tin nhắn cũ...</span>}
     {!messages.length && <div className="chat-state">Chưa có tin nhắn. Hãy bắt đầu cuộc trò chuyện.</div>}
     {messages.map((message, index) => {
@@ -214,5 +254,6 @@ export function ChatMessageList({ controller, userId, compact = false, onOpenMed
         </div>
       </div>;
     })}
+    </div>
   </div>;
 }

@@ -7,6 +7,7 @@ export const routes = {
   chat: "/chat",
   conversation: (conversationId: string) => `/chat/${encodeURIComponent(conversationId)}`,
   profile: (userId: string) => `/profile/${encodeURIComponent(userId)}`,
+  profileFeed: (userId: string, postId: string) => `/profile/${encodeURIComponent(userId)}/posts/${encodeURIComponent(postId)}`,
   post: (postId: string) => `/post/${encodeURIComponent(postId)}`,
   story: (ownerId: string, storyId?: string) => `/story/${encodeURIComponent(ownerId)}${storyId ? `/${encodeURIComponent(storyId)}` : ""}`,
   createPost: "/create/post",

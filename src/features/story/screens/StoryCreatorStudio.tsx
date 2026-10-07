@@ -36,6 +36,9 @@ import { useBodyScrollLock } from "../../../shared/overlays/useBodyScrollLock";
 import { createStoryPublicationId } from "../creation/storyPublication";
 import type { DraftBackground, StoryDraft, StoryDraftSaveRequest } from "../creation/storyDraft";
 import { publishStoryDrafts } from "../creation/publishStoryDrafts";
+import { useViewportMode } from '../../../shared/hooks/useViewportMode';
+import { useVisualViewportSurface } from '../../../shared/hooks/useVisualViewportSurface';
+import { useEditorExitGuard } from '../../../shared/overlays/useEditorExitGuard';
 
 type StoryCreatorStudioProps = {
   userId: string;
@@ -78,6 +81,8 @@ function formatSeconds(value: number | null) {
 }
 
 export function StoryCreatorStudio({ userId, onClose, onPublished, onSaveDraft, onDraftSaved, initialDraft }: StoryCreatorStudioProps) {
+  const mobile = useViewportMode() === 'mobile';
+  const viewportStyle = useVisualViewportSurface(mobile);
 async function composeImageStoryFile(draft: StoryDraft): Promise<File> {
   if (!draft.file) throw new Error("Story media file is unavailable.");
   if (draft.mediaType !== "IMAGE") return draft.file;
@@ -138,6 +143,8 @@ async function composeImageStoryFile(draft: StoryDraft): Promise<File> {
   const active = drafts.find((draft) => draft.id === activeId) ?? drafts[0] ?? null;
   const readyCount = drafts.filter((draft) => draft.status !== "published").length;
   const allPublished = drafts.length > 0 && drafts.every((draft) => draft.status === "published");
+  const allowExit = useEditorExitGuard(drafts.some(draft => draft.status !== 'published'), 'Bỏ các thay đổi Story chưa lưu?');
+  function closeEditor() { allowExit(); onClose(); }
   const canPublish = drafts.length > 0 && !publishing && drafts.some((draft) => draft.status !== "published");
   const activeIndex = active ? drafts.findIndex((draft) => draft.id === active.id) : -1;
 
@@ -354,7 +361,7 @@ async function composeImageStoryFile(draft: StoryDraft): Promise<File> {
       });
       onDraftSaved?.(draft);
       setPublishing(false);
-      onClose();
+      closeEditor();
     } catch {
       setPublishing(false);
       setClosePrompt(false);
@@ -389,21 +396,22 @@ async function composeImageStoryFile(draft: StoryDraft): Promise<File> {
     }
     emitAppToast("Story đang được xử lý và sẽ sớm hiển thị.");
     try {
+      allowExit();
       await onPublished();
     } catch {
       // Submission was already accepted; a later SSE event remains authoritative.
     }
-    onClose();
+    closeEditor();
   }
   function requestClose() {
     if (drafts.some((draft) => draft.status !== "published")) setClosePrompt(true);
-    else onClose();
+    else closeEditor();
   }
 
   const mediaClass = useMemo(() => active ? `story-studio-media ${active.fit} background-${active.background}` : "story-studio-media empty", [active]);
 
   return (
-    <div className="story-studio-backdrop" role="dialog" aria-modal="true" aria-label="Tạo Story">
+    <div className="story-studio-backdrop" style={viewportStyle} role="dialog" aria-modal="true" aria-label="Tạo Story">
       <section className="story-studio">
         <header className="story-studio-header">
           <button className="story-studio-icon" onClick={requestClose} aria-label="Đóng trình tạo Story"><X size={21} /></button>
@@ -482,7 +490,7 @@ async function composeImageStoryFile(draft: StoryDraft): Promise<File> {
             )}
           </main>
 
-          <aside id="story-studio-tools" className={`story-studio-tools ${mobileToolsOpen ? "is-open" : ""}`}>
+          <aside id="story-studio-tools" hidden={mobile && !mobileToolsOpen} className={`story-studio-tools ${mobileToolsOpen ? "is-open" : ""}`}>
             <div className="story-mobile-tools-header"><strong>Công cụ chỉnh sửa</strong><button onClick={() => setMobileToolsOpen(false)} aria-label="Đóng công cụ chỉnh sửa"><X size={20} /></button></div>
             {active ? (
               <>
@@ -598,7 +606,7 @@ async function composeImageStoryFile(draft: StoryDraft): Promise<File> {
               <strong>Lưu bản nháp trước khi thoát?</strong>
               <span>Các media chưa đăng sẽ bị mất nếu bạn bỏ qua.</span>
               <button onClick={() => void saveDraftAndClose()}>Lưu bản nháp</button>
-              <button className="danger" onClick={onClose}>Bỏ bản nháp</button>
+              <button className="danger" onClick={closeEditor}>Bỏ bản nháp</button>
               <button onClick={() => setClosePrompt(false)}>Tiếp tục chỉnh sửa</button>
             </div>
           </div>

@@ -42,13 +42,13 @@ describe("useProfileConnections", () => {
     }));
 
     await waitFor(() => expect(result.current.state).toBe("ready"));
-    expect(profileApi.getConnections).toHaveBeenCalledWith({
+    expect(profileApi.getConnections).toHaveBeenCalledWith(expect.objectContaining({
       profileId: "owner",
       viewerId: "viewer",
       tab: "FOLLOWERS",
       query: "user",
       sort: "NAME",
-    });
+    }));
     expect(result.current.rows).toEqual([row]);
   });
 
@@ -78,7 +78,8 @@ describe("useProfileConnections", () => {
     await act(async () => result.current.changeRelationship(row));
 
     expect(profileApi.follow).toHaveBeenCalledWith("viewer", "user-1");
-    expect(profileApi.getConnections).toHaveBeenCalledTimes(2);
+    expect(profileApi.getConnections).toHaveBeenCalledTimes(1);
+    expect(result.current.rows[0].relationshipAction).toBe("Following");
   });
 
   it("removes a row only after an unfollow succeeds", async () => {
@@ -97,4 +98,29 @@ describe("useProfileConnections", () => {
     expect(profileApi.unfollow).toHaveBeenCalledWith("viewer", "user-1");
     expect(result.current.rows).toEqual([]);
   });
+});
+
+const options = { profileId: "owner", viewerId: "viewer", tab: "FOLLOWERS" as const, query: "", sort: "RECENT" as const };
+const page = (users: ConnectionUserDto[], currentPage = 0, hasNextPage = false) => ({ users, currentPage, hasNextPage } as Awaited<ReturnType<typeof profileApi.getConnections>>);
+it("appends overlapping pages once and retries a failed next page without losing rows", async () => {
+  vi.mocked(profileApi.getConnections).mockReset().mockResolvedValueOnce(page([row], 0, true)).mockRejectedValueOnce(new Error("offline")).mockResolvedValueOnce(page([row, { ...row, userId: "second" }], 1));
+  const { result } = renderHook(() => useProfileConnections(options));
+  await waitFor(() => expect(result.current.state).toBe("ready"));
+  await act(async () => result.current.loadMore());
+  expect(result.current.rows).toEqual([row]);
+  expect(result.current.error).toBe("offline");
+  await act(async () => result.current.loadMore());
+  expect(result.current.rows.map(item => item.userId)).toEqual(["user-1", "second"]);
+  expect(result.current.hasMore).toBe(false);
+});
+it("ignores old searches after a new search completes and aborts their request", async () => {
+  let resolveOld!: (value: ReturnType<typeof page>) => void;
+  vi.mocked(profileApi.getConnections).mockReset().mockImplementationOnce(() => new Promise(resolve => { resolveOld = resolve; })).mockResolvedValueOnce(page([{ ...row, userId: "new" }]));
+  const { result, rerender } = renderHook(({ query }) => useProfileConnections({ ...options, query }), { initialProps: { query: "old" } });
+  const signal = vi.mocked(profileApi.getConnections).mock.calls[0][0].signal;
+  rerender({ query: "new" });
+  await waitFor(() => expect(result.current.rows[0]?.userId).toBe("new"));
+  await act(async () => resolveOld(page([row])));
+  expect(result.current.rows[0].userId).toBe("new");
+  expect(signal?.aborted).toBe(true);
 });

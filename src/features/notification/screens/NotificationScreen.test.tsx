@@ -124,3 +124,16 @@ describe("NotificationScreen requests", () => {
     expect(screen.getByText("Visible Actor").closest("article")).toHaveClass("unread");
   });
 });
+
+it("retries the next notification page while preserving and deduplicating rows", async () => {
+  const first = { ...page("First Actor", "first"), totalPages: 2 };
+  notificationApi.list.mockResolvedValueOnce(first).mockRejectedValueOnce(new Error("offline"))
+    .mockResolvedValueOnce({ ...page("Second Actor", "second"), content: [...first.content, ...page("Second Actor", "second").content] });
+  render(<NotificationScreen userId="viewer-1" onNavigate={vi.fn()} />);
+  fireEvent.click(await screen.findByRole("button", { name: "Load more notifications" }));
+  expect(screen.getByText("First Actor")).toBeTruthy();
+  fireEvent.click(await screen.findByRole("button", { name: "Retry loading notifications" }));
+  expect(await screen.findByText("Second Actor")).toBeTruthy();
+  expect(screen.getAllByText("First Actor")).toHaveLength(1);
+  expect(notificationApi.list.mock.calls.map(args => args[2])).toEqual([0, 1, 1]);
+});

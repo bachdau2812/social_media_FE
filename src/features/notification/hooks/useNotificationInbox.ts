@@ -18,6 +18,10 @@ export function useNotificationInbox(
   const [error, setError] = useState("");
   const requestController = useRef<AbortController | null>(null);
   const requestVersion = useRef(0);
+  const nextPage = useRef(0);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [moreError, setMoreError] = useState(false);
   const inboxRef = useRef(inbox);
   const rows = inbox.userId === userId ? inbox.rows : [];
 
@@ -32,7 +36,8 @@ export function useNotificationInbox(
     replaceRows(update(current));
   }, [replaceRows, userId]);
 
-  const load = useCallback(async (preserveRows = false) => {
+  const load = useCallback(async (preserveRows = false, append = false) => {
+    if (append && requestController.current) return;
     requestController.current?.abort();
     const controller = new AbortController();
     const version = ++requestVersion.current;
@@ -43,21 +48,33 @@ export function useNotificationInbox(
       replaceRows([]);
       setStatus("loading");
     }
-    setError("");
+    setError(""); setMoreError(false);
+    if (append) setLoadingMore(true); else { setHasMore(false); setLoadingMore(false); }
+    const requestedPage = append ? nextPage.current : 0;
     try {
-      const page = await notificationApi.list(userId, filter, 0, 50, controller.signal);
+      const page = await notificationApi.list(userId, filter, requestedPage, 50, controller.signal);
       if (controller.signal.aborted || version !== requestVersion.current) return;
-      replaceRows((page.content ?? []).map(notificationToViewItem));
+      const incoming = (page.content ?? []).map(notificationToViewItem);
+      replaceRows(Array.from(new Map([...incoming, ...(append ? inboxRef.current.rows : [])].map(item => [item.id, item])).values()).sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt)));
+      nextPage.current = requestedPage + 1;
+      setHasMore(nextPage.current < page.totalPages);
       setStatus("ready");
     } catch (reason) {
       if (controller.signal.aborted || version !== requestVersion.current) return;
-      if (keepVisibleRows) {
+      if (append) {
+        setMoreError(true);
+      } else if (keepVisibleRows) {
         setStatus("ready");
         setError("Không thể làm mới thông báo. Dữ liệu đang hiển thị vẫn được giữ lại.");
       } else {
         replaceRows([]);
         setStatus("error");
         setError(reason instanceof Error ? reason.message : "KhÃ´ng thá»ƒ táº£i thÃ´ng bÃ¡o");
+      }
+    } finally {
+      if (requestController.current === controller) {
+        requestController.current = null;
+        setLoadingMore(false);
       }
     }
   }, [filter, replaceRows, userId]);
@@ -129,6 +146,7 @@ export function useNotificationInbox(
     status: inbox.userId === userId ? status : "loading",
     error,
     load,
+    hasMore, loadingMore, moreError, loadMore: () => load(true, true),
     markAll,
     openNotification,
     handleAction,

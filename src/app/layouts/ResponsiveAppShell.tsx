@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { useViewportMode, type ViewportMode } from "../../shared/hooks/useViewportMode";
 
 type ResponsiveAppShellProps = {
@@ -9,6 +9,7 @@ type ResponsiveAppShellProps = {
   mobileNavigation: ReactNode;
   rightRail?: ReactNode;
   viewportMode?: ViewportMode;
+  style?: CSSProperties;
 };
 
 export function ResponsiveAppShell({
@@ -19,13 +20,14 @@ export function ResponsiveAppShell({
   mobileNavigation,
   rightRail,
   viewportMode,
+  style,
 }: ResponsiveAppShellProps) {
   const detectedViewportMode = useViewportMode();
   const mode = viewportMode ?? detectedViewportMode;
   const mobile = mode === "mobile";
 
   return (
-    <div className={["app-shell", className].filter(Boolean).join(" ")} data-viewport-mode={mode}>
+    <div className={["app-shell", className].filter(Boolean).join(" ")} data-viewport-mode={mode} style={style}>
       {mobile ? mobileHeader : desktopNavigation}
       <main className="app-main">{children}</main>
       {mode === "desktop" && rightRail}

@@ -51,7 +51,7 @@ export function MobileNav({ active, chatUnreadCount, notificationUnreadCount, on
     const Icon = item.icon;
     const unreadCount = unreadCountFor(item.id, counts);
     const unreadLabel = unreadCount > 0 ? `, ${unreadCount} unread` : "";
-    return <button key={item.id} className={active === item.id ? "active" : ""} onClick={() => onNavigate(item.id)} aria-label={`${item.label}${unreadLabel}`}><span className="mobile-nav-icon"><Icon size={21} />{unreadBadge(unreadCount)}</span></button>;
+    return <button key={item.id} className={active === item.id ? "active" : ""} onClick={() => onNavigate(item.id)} aria-current={active === item.id ? "page" : undefined} aria-label={`${item.label}${unreadLabel}`}><span className="mobile-nav-icon"><Icon size={22} strokeWidth={active === item.id ? 2.5 : 1.8} />{unreadBadge(unreadCount)}</span></button>;
   })}</nav>;
 }
 

@@ -16,6 +16,7 @@ import { StorySlide } from "./StorySlide";
 import { StoryTrack } from "./StoryTrack";
 import { StoryViewersPanel } from "./StoryViewersPanel";
 import { StoryViewport } from "./StoryViewport";
+import { useSheetHistoryRestore } from '../../../shared/overlays/useLocalSheetHistory';
 
 export type StoryViewerProps = {
   stories: StoryItem[];
@@ -38,10 +39,11 @@ export function StoryViewerController({ stories, index, currentUserId, onClose, 
   const [likePendingIds, setLikePendingIds] = useState<Set<string>>(new Set());
   const [moreOpen, setMoreOpen] = useState(false);
   const [viewersOpen, setViewersOpen] = useState(false);
+  const [viewerCounts, setViewerCounts] = useState<Record<string, number>>({});
   const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
   const [replyPendingIds, setReplyPendingIds] = useState<Set<string>>(new Set());
   const [replyErrors, setReplyErrors] = useState<Record<string, string | null>>({});
-  const paused = userPaused || holding || composerFocused || visibilityPaused;
+  const paused = userPaused || holding || composerFocused || visibilityPaused || viewersOpen;
   const pausedRef = useRef(paused);
   const resumeAfterVisibilityRef = useRef(false);
   const reportedViewsRef = useRef(new Set<string>());
@@ -56,6 +58,7 @@ export function StoryViewerController({ stories, index, currentUserId, onClose, 
   });
   const moveStory = navigation.move;
   const current = stories[navigation.committedIndex];
+  useSheetHistoryRestore(id => { if (id === `story-viewers-${current?.id}`) setViewersOpen(true); });
   const canGoPrevious = navigation.committedIndex > 0;
   const canGoNext = navigation.committedIndex < stories.length - 1;
   const navigating = navigation.isPreparing || navigation.transitionState === "animating";
@@ -186,8 +189,14 @@ export function StoryViewerController({ stories, index, currentUserId, onClose, 
     }
     function handleKeyDown(event: KeyboardEvent) {
       const target = event.target as HTMLElement | null;
+      if (event.key === "Escape") {
+        if (viewersOpen) setViewersOpen(false);
+        else if (moreOpen) setMoreOpen(false);
+        else onClose();
+        return;
+      }
+      if (viewersOpen) return;
       if (target?.matches("input, textarea, [contenteditable='true']")) return;
-      if (event.key === "Escape") onClose();
       if (event.key === "ArrowLeft") void moveStory(-1);
       if (event.key === "ArrowRight") void moveStory(1);
       if (event.key === " " || event.key === "Spacebar") { event.preventDefault(); setUserPaused((value) => !value); }
@@ -199,7 +208,7 @@ export function StoryViewerController({ stories, index, currentUserId, onClose, 
       document.removeEventListener("visibilitychange", handleVisibility);
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [moveStory, onClose, toggleMuted]);
+  }, [moreOpen, moveStory, onClose, toggleMuted, viewersOpen]);
 
   if (!current) return null;
   return <div className="story-immersive-backdrop" role="dialog" aria-modal="true">
@@ -217,11 +226,10 @@ export function StoryViewerController({ stories, index, currentUserId, onClose, 
       <button className="story-hotzone previous" disabled={!canGoPrevious || navigating} onClick={() => { if (!navigation.consumeSuppressedClick()) void moveStory(-1); }} aria-label="Previous story" />
       <button className="story-hotzone next" disabled={!canGoNext || navigating} onClick={() => { if (!navigation.consumeSuppressedClick()) void moveStory(1); }} aria-label="Next story" />
       {navigation.isPreparing && <div className="story-navigation-loading" aria-label="Preparing story"><span /></div>}
-      {ownStory && <div className="story-stickers own-only"><button onClick={() => setViewersOpen(true)}><Users size={15} /> Viewers</button></div>}
       {playback.playBlocked && <button className="story-play-blocked" onClick={() => retryPlayback(muted)}>Tap to play</button>}
       {ownStory && moreOpen && <div className="story-more-popover"><button onClick={() => { void navigator.clipboard?.writeText(`${window.location.origin}${routes.story(current.userId, current.id)}`); setMoreOpen(false); }}>Copy link</button><button onClick={() => { setMoreOpen(false); setViewersOpen(true); }}>Story information</button><button className="danger" disabled={!onDelete} onClick={() => { setMoreOpen(false); if (onDelete) void onDelete(current.id); }}>Delete story</button></div>}
-      <StoryReplyComposer name={current.name} value={reply} permitted={replyPermitted} sending={replyPending} error={replyError} liked={liked} showLike={likePermitted} likePending={likePending} onChange={(value) => { setReplyDrafts((drafts) => ({ ...drafts, [current.id]: value })); setReplyErrors((errors) => ({ ...errors, [current.id]: null })); }} onLikedChange={() => void toggleStoryLike()} onFocusChange={setComposerFocused} onSubmit={(event) => void submitReply(event)} />
-      {viewersOpen && ownStory && <StoryViewersPanel storyId={current.id} ownerId={currentUserId} onClose={() => setViewersOpen(false)} onOpenProfile={(userId) => { setViewersOpen(false); void onOpenProfile(userId); }} />}
+      {ownStory ? <button className="story-owner-viewers" onClick={() => setViewersOpen(true)} aria-label="Xem người xem"><Users size={18} /><span>{viewerCounts[current.id] === undefined ? "Người xem" : `${viewerCounts[current.id]} lượt xem`}</span></button> : <StoryReplyComposer name={current.name} value={reply} permitted={replyPermitted} sending={replyPending} error={replyError} liked={liked} showLike={likePermitted} likePending={likePending} onChange={(value) => { setReplyDrafts((drafts) => ({ ...drafts, [current.id]: value })); setReplyErrors((errors) => ({ ...errors, [current.id]: null })); }} onLikedChange={() => void toggleStoryLike()} onFocusChange={setComposerFocused} onSubmit={(event) => void submitReply(event)} />}
+      {viewersOpen && ownStory && <StoryViewersPanel key={current.id} storyId={current.id} ownerId={currentUserId} onTotalChange={(total) => setViewerCounts((counts) => ({ ...counts, [current.id]: total }))} onClose={() => setViewersOpen(false)} onOpenProfile={(userId) => { setViewersOpen(false); void onOpenProfile(userId); }} />}
     </StoryViewport>
   </div>;
 }

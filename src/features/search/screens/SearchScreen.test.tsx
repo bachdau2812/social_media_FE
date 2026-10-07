@@ -1,7 +1,9 @@
 // @vitest-environment jsdom
-import { act, cleanup, render } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 
+const detail = vi.hoisted(() => ({ getSurfaceDetail: vi.fn(), map: vi.fn(value => value) }));
+vi.mock("../../post", () => ({ postApi: detail, postDetailsToPost: detail.map }));
 const router = vi.hoisted(() => ({ navigate: vi.fn() }));
 const search = vi.hoisted(() => ({
   users: vi.fn(),
@@ -30,5 +32,19 @@ it("keeps the active debounced request stable across parent renders", async () =
   await act(async () => { vi.advanceTimersByTime(1); });
 
   expect(search.users).toHaveBeenCalledOnce();
-  expect(search.users).toHaveBeenCalledWith("viewer-1", "bach", expect.any(AbortSignal));
+  expect(search.users).toHaveBeenCalledWith("viewer-1", "bach", expect.any(AbortSignal), 0);
+});
+
+it("opens search results through the shared surface detail request", async () => {
+  search.users.mockResolvedValue({ content: [], totalPages: 1 });
+  search.posts.mockResolvedValue({ content: [{ postId: "post-1", userId: "author", items: [], authorFullName: "Author", hashtags: [] }], totalPages: 1 });
+  const hydrated = { id: "post-1" };
+  detail.getSurfaceDetail.mockResolvedValue(hydrated);
+  const onSelectPost = vi.fn();
+  render(<SearchScreen viewerId="viewer" onSelectPost={onSelectPost} onOpenProfile={vi.fn()} />);
+  fireEvent.click(screen.getByRole("tab", { name: "Posts" }));
+  fireEvent.click(await screen.findByRole("button", { name: /Open post by/ }));
+  await act(async () => {});
+  expect(detail.getSurfaceDetail).toHaveBeenCalledWith("post-1");
+  expect(onSelectPost).toHaveBeenCalledWith(hydrated);
 });

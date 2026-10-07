@@ -11,8 +11,8 @@
 .suggested-user small { color: var(--app-text-muted); }
 .suggested-friends-list article > div { display: flex; align-items: center; gap: 3px; }
 .suggested-friends-list article > div button { display: inline-flex; min-height: 36px; align-items: center; gap: 5px; padding: 7px; font-size: 12px; }
-.suggestion-skeleton { display: grid; gap: 7px; }
-.suggestion-skeleton i { height: 52px; border-radius: 6px; background: var(--app-surface-subtle); }
+.suggestion-loading { display: grid; min-height: 88px; place-items: center; }
+.suggestion-loading .shared-spinner { width: 18px; height: 18px; border-width: 1.5px; border-top-color: var(--app-text-muted); }
 .suggestions-see-all { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 40px; color: var(--app-text-muted); }
 .suggestions-dialog-backdrop { position: fixed; inset: 0; z-index: 1700; display: grid; place-items: center; padding: 20px; background: rgb(0 0 0 / 42%); }
 .suggestions-dialog { display: flex; flex-direction: column; width: min(460px, 100%); max-height: min(680px, calc(100dvh - 40px)); overflow: hidden; border: 1px solid var(--app-border); border-radius: var(--app-radius-md); background: var(--app-surface); box-shadow: 0 20px 55px rgb(0 0 0 / 18%); }

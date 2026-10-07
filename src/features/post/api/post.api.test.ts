@@ -41,3 +41,11 @@ it("owns post like and repost commands with encoded user ids", () => {
   expect(apiSend).toHaveBeenNthCalledWith(1, "/likes/users/user%2F1", "POST", { targetId: "post/1", targetType: "POST" });
   expect(apiSend).toHaveBeenNthCalledWith(2, "/posts/post%2F1/repost?actorId=user%2F1", "DELETE");
 });
+it('shares hydrated surface requests until a post mutation invalidates them', async () => {
+  vi.mocked(apiGet).mockResolvedValue({ postId: 'cache-post' });
+  await Promise.all([postApi.getSurfaceDetail('cache-post'), postApi.getSurfaceDetail('cache-post')]);
+  expect(apiGet).toHaveBeenCalledTimes(1);
+  postApi.like('v', 'cache-post');
+  await postApi.getSurfaceDetail('cache-post');
+  expect(apiGet).toHaveBeenCalledTimes(2);
+});

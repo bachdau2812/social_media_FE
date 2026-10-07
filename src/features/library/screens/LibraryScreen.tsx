@@ -33,38 +33,64 @@ export function LibraryScreen({ userId, onOpenPost, onOpenStory, onResumeDraft }
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const requestRef = useRef<AbortController | null>(null);
 
-  const load = useCallback(async () => {
+  type Collection = "SAVED" | "DRAFTS" | "POST" | "STORY";
+  const collection: Collection = tab === "ARCHIVE" ? archiveType : tab;
+  const cache = useRef<Partial<Record<Collection, { page: number; hasMore: boolean }>>>({});
+  const account = useRef(userId);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [moreError, setMoreError] = useState(false);
+  const load = useCallback(async (append = false) => {
+    if (append && requestRef.current) return;
     requestRef.current?.abort();
     const controller = new AbortController();
     requestRef.current = controller;
-    setStatus("loading");
+    const page = append ? (cache.current[collection]?.page ?? 0) + 1 : 0;
+    if (append) setLoadingMore(true); else setStatus("loading");
+    setMoreError(false);
     try {
-      const [savedPage, nextDrafts, nextArchive, nextStoryArchive] = await Promise.all([
-        libraryApi.saved(userId, 0, 30, controller.signal),
-        libraryApi.drafts(userId, controller.signal),
-        libraryApi.archive(userId, "POST", controller.signal),
-        libraryApi.storyArchive(userId, 0, 100, controller.signal),
-      ]);
-      if (controller.signal.aborted) return;
-      setSaved(savedPage.content ?? []);
-      setDrafts(nextDrafts ?? []);
-      setArchive(nextArchive ?? []);
-      setStoryArchive(nextStoryArchive.content ?? []);
-      setStatus("ready");
+      let nextHasMore = false;
+      const merge = <T extends { id: string }>(current: T[], incoming: T[]) => Array.from(new Map([...current, ...incoming].map(item => [item.id, item])).values());
+      if (collection === "SAVED") {
+        const result = await libraryApi.saved(userId, page, 30, controller.signal);
+        if (controller.signal.aborted) return;
+        setSaved(current => merge(append ? current : [], result.content ?? []));
+        nextHasMore = page + 1 < result.totalPages;
+      } else if (collection === "DRAFTS") {
+        const result = await libraryApi.drafts(userId, controller.signal);
+        if (controller.signal.aborted) return;
+        setDrafts(result ?? []);
+      } else if (collection === "POST") {
+        const result = await libraryApi.archive(userId, "POST", controller.signal);
+        if (controller.signal.aborted) return;
+        setArchive(result ?? []);
+      } else {
+        const result = await libraryApi.storyArchive(userId, page, 30, controller.signal);
+        if (controller.signal.aborted) return;
+        setStoryArchive(current => merge(append ? current : [], result.content ?? []));
+        nextHasMore = page + 1 < result.totalPages;
+      }
+      cache.current[collection] = { page, hasMore: nextHasMore };
+      setHasMore(nextHasMore); setStatus("ready");
     } catch {
-      if (!controller.signal.aborted) setStatus("error");
+      if (!controller.signal.aborted) {
+        if (append) setMoreError(true); else setStatus("error");
+      }
     } finally {
-      if (requestRef.current === controller) requestRef.current = null;
+      if (requestRef.current === controller) { requestRef.current = null; setLoadingMore(false); }
     }
-  }, [userId]);
-
+  }, [collection, userId]);
   useEffect(() => {
-    void load();
-    return () => {
-      requestRef.current?.abort();
-      requestRef.current = null;
-    };
-  }, [load]);
+    if (account.current !== userId) {
+      account.current = userId; cache.current = {};
+      setSaved([]); setDrafts([]); setArchive([]); setStoryArchive([]);
+    }
+    setLoadingMore(false); setMoreError(false);
+    const cached = cache.current[collection];
+    if (cached) { setStatus("ready"); setHasMore(cached.hasMore); }
+    else { setHasMore(false); void load(); }
+    return () => { requestRef.current?.abort(); requestRef.current = null; };
+  }, [collection, load, userId]);
 
   async function removeSaved(item: SavedPost) {
     await libraryApi.removeSaved(userId, item.postId);
@@ -97,6 +123,10 @@ export function LibraryScreen({ userId, onOpenPost, onOpenStory, onResumeDraft }
     {status === "ready" && tab === "SAVED" && (saved.length ? <div className="feature-library-grid">{saved.map((item) => <article key={item.id}><button className="library-preview placeholder" onClick={() => onOpenPost(item.postId)}><Image size={26} /><small>Bài viết</small></button><div><strong>{item.postId.slice(0, 12)}</strong><button onClick={() => void removeSaved(item)} aria-label="Bỏ lưu"><Trash2 size={17} /></button></div></article>)}</div> : <LibraryState title="Chưa có bài viết đã lưu" />)}
     {status === "ready" && tab === "DRAFTS" && (drafts.length ? <div className="feature-library-grid">{drafts.map((item) => <article key={item.id}><button className="library-preview" onClick={() => onResumeDraft(toDraftResumeIntent(item))}>{item.thumbnailUrl ? <img src={item.thumbnailUrl} alt="" /> : <FileEdit size={26} />}<small>{item.draftType}</small></button><div><strong>{item.captionPreview || "Bản nháp chưa đặt tên"}</strong><button onClick={() => void removeDraft(item)} aria-label="Xóa bản nháp"><Trash2 size={17} /></button></div></article>)}</div> : <LibraryState title="Chưa có bản nháp" />)}
     {status === "ready" && tab === "ARCHIVE" && <><div className="feature-library-filter"><button className={archiveType === "POST" ? "active" : ""} onClick={() => setArchiveType("POST")}>Bài viết</button><button className={archiveType === "STORY" ? "active" : ""} onClick={() => setArchiveType("STORY")}>Story</button></div>{archiveType === "POST" ? (archiveRows.length ? <div className="feature-library-grid">{archiveRows.map((item) => <article key={item.id}><button className="library-preview" onClick={() => onOpenPost(item.contentId)}>{item.thumbnailUrl ? <img src={item.thumbnailUrl} alt="" /> : <Archive size={26} />}<small>Bài viết</small></button><div><strong>{item.captionPreview || item.contentId.slice(0, 12)}</strong><span><button onClick={() => void restore(item)} aria-label="Khôi phục"><Undo2 size={17} /></button><button onClick={() => void removeArchive(item)} aria-label="Xóa vĩnh viễn"><Trash2 size={17} /></button></span></div></article>)}</div> : <LibraryState title="Chưa có bài viết lưu trữ" />) : (storyArchive.length ? <div className="feature-library-grid story-archive-grid">{storyArchive.map((item) => <article key={item.id}><button className="library-preview" onClick={() => onOpenStory(item.id)}>{item.mediaUrl ? (item.mediaType?.toUpperCase().includes("VIDEO") ? <video src={item.mediaUrl} muted preload="metadata" /> : <img src={item.mediaUrl} alt="" />) : <Archive size={26} />}<small>Story</small></button><div><strong>{item.createdAt ? new Date(item.createdAt).toLocaleDateString("vi-VN") : item.id.slice(0, 12)}</strong></div></article>)}</div> : <LibraryState title="Chưa có Story lưu trữ" />)}</>}
+    {status === "ready" && hasMore && <div className="feature-library-pagination">
+      {moreError && <p role="alert">Kh?ng th? t?i th?m m?c.</p>}
+      <button aria-label={moreError ? "Retry loading more" : "Load more"} disabled={loadingMore} onClick={() => void load(true)}>{loadingMore ? "?ang t?i?" : moreError ? "Th? l?i" : "Xem th?m"}</button>
+    </div>}
   </section>;
 }
 

@@ -8,6 +8,7 @@ export type AppRoute = {
   view: ViewKey;
   known: boolean;
   profileUserId?: string;
+  profileFeedPostId?: string;
   postId?: string;
   commentId?: string;
   chatTarget?: ChatNavigationTarget;
@@ -68,6 +69,9 @@ export function readAppRoute(location: RouteLocation): AppRoute {
     const parts = path.split("/").slice(1).map(decodeURIComponent);
     if (!parts.every((part) => part.trim())) return { view: "home", known: false };
     if (parts[0] === "profile" && parts.length === 2) return { view: "profile", known: true, profileUserId: parts[1] };
+    if (parts[0] === "profile" && parts.length === 4 && parts[2] === "posts") return {
+      view: "profile", known: true, profileUserId: parts[1], profileFeedPostId: parts[3],
+    };
     if (parts[0] === "post" && parts.length === 2) return {
       view: "home", known: true, postId: parts[1], ...(params.get("commentId") ? { commentId: params.get("commentId")! } : {}),
     };

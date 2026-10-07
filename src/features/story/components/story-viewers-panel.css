@@ -1,1 +1,229 @@
-.story-viewers-panel{position:absolute;z-index:12;right:0;top:0;bottom:0;width:min(360px,92vw);background:#fff;color:#151515;border-left:1px solid rgba(255,255,255,.2);box-shadow:-12px 0 36px rgba(0,0,0,.22);display:flex;flex-direction:column}.story-viewers-panel>header{display:flex;align-items:center;justify-content:space-between;padding:16px;border-bottom:1px solid #e8e8e8}.story-viewers-panel>header div{display:grid;gap:2px}.story-viewers-panel>header span{font-size:12px;color:#777}.story-viewers-panel button{border:0;background:transparent}.story-viewers-panel>header button{width:40px;height:40px;display:grid;place-items:center}.story-viewers-list{overflow:auto;padding:8px 10px 20px}.story-viewers-list>button:not(.story-viewers-more):not(.story-viewers-retry){width:100%;display:grid;grid-template-columns:44px minmax(0,1fr) auto;align-items:center;gap:10px;text-align:left;padding:9px 6px;border-radius:5px}.story-viewers-list>button:hover{background:#f4f4f4}.story-viewers-list .avatar{width:44px;height:44px;border-radius:50%}.story-viewers-list span{min-width:0;display:grid}.story-viewers-list small,.story-viewers-list time{font-size:11px;color:#777}.story-viewers-list em{font-size:12px;color:#8f2e3b;display:flex;gap:4px}.story-viewers-list>p,.story-viewers-loading{padding:24px;text-align:center;color:#777}.story-viewers-more,.story-viewers-retry{width:100%;min-height:44px;color:#555;display:flex;align-items:center;justify-content:center;gap:7px}@media(max-width:640px){.story-viewers-panel{position:fixed;inset:0;width:100%;padding-bottom:env(safe-area-inset-bottom)}}
+.story-viewers-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: flex-end;
+  background: rgb(0 0 0 / 42%);
+  animation: storyViewersFade 160ms ease both;
+}
+
+.story-viewers-panel {
+  width: 100%;
+  height: 72%;
+  container: story-viewers / inline-size;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: 26px 26px 0 0;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  background: #fff;
+  color: #171717;
+  box-shadow: 0 -8px 32px rgb(0 0 0 / 12%);
+  animation: storyViewersRise 200ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.story-viewers-handle {
+  flex: 0 0 auto;
+  width: 38px;
+  height: 4px;
+  margin: 9px auto 0;
+  border-radius: 99px;
+  background: #d1d1d1;
+}
+
+/* Scope above the immersive story header rules; this is a white sheet header. */
+.story-viewers-backdrop .story-viewers-panel > .story-viewers-header {
+  flex: 0 0 auto;
+  min-height: 54px;
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) 32px;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 14px 10px;
+  border-bottom: 1px solid #ededed;
+  background: #fff;
+}
+
+.story-viewers-header h2 {
+  grid-column: 2;
+  margin: 0;
+  text-align: center;
+  font-size: 15px;
+  line-height: 1.4;
+  font-weight: 600;
+}
+
+.story-viewers-panel button {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+}
+
+.story-viewers-header > button {
+  grid-column: 3;
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  padding: 0;
+}
+
+.story-viewers-header > button:hover { background: #f3f3f3; }
+.story-viewers-panel button:focus-visible { outline: 2px solid #3897f0; outline-offset: 2px; }
+.story-viewers-panel button:disabled { cursor: wait; opacity: 0.65; }
+
+.story-viewers-toolbar {
+  flex: 0 0 auto;
+  display: grid;
+  gap: 12px;
+  padding: 18px 18px 8px;
+}
+
+.story-viewers-section-title {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.story-viewers-section-title h3 { margin: 0; font-size: 14px; font-weight: 600; }
+.story-viewers-section-title > span { color: #737373; font-size: 11px; }
+
+.story-viewers-search {
+  min-height: 38px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 0 12px;
+  border-radius: 10px;
+  background: #f2f2f2;
+  color: #8e8e8e;
+}
+
+.story-viewers-search:focus-within { box-shadow: 0 0 0 2px rgb(56 151 240 / 35%); }
+.story-viewers-search > svg { flex-shrink: 0; }
+.story-viewers-search input {
+  width: 100%;
+  min-width: 0;
+  height: 38px;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #171717;
+  font: inherit;
+  font-size: 13px;
+}
+
+.story-viewers-search input::placeholder { color: #8e8e8e; }
+.story-viewers-search input::-webkit-search-cancel-button { display: none; }
+.story-viewers-search > button { display: grid; place-items: center; padding: 5px; border-radius: 50%; }
+.story-viewers-match-count { color: #737373; font-size: 11px; }
+
+.story-viewers-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 4px 12px 16px;
+}
+
+.story-viewer-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 8px;
+  min-height: 68px;
+  padding: 6px;
+  border-radius: 10px;
+}
+
+.story-viewer-row:hover { background: #fafafa; }
+.story-viewer-profile {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0;
+  text-align: left;
+}
+
+.story-viewer-profile .story-viewer-avatar {
+  flex: 0 0 48px;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.story-viewer-identity { min-width: 0; display: grid; gap: 3px; }
+.story-viewer-identity strong,
+.story-viewer-identity small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.story-viewer-identity strong { font-size: 13px; font-weight: 600; line-height: 1.35; }
+.story-viewer-identity small { font-size: 12px; color: #737373; line-height: 1.35; }
+.story-viewer-reaction { flex-shrink: 0; margin-left: auto; display: flex; align-items: center; color: #ed4956; }
+
+.story-viewers-panel .story-viewer-follow {
+  min-width: 82px;
+  min-height: 32px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  background: #0095f6;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.story-viewers-panel .story-viewer-follow:hover { background: #1877f2; }
+.story-viewers-panel .story-viewer-follow.is-following { background: #efefef; color: #171717; }
+.story-viewers-panel .story-viewer-follow.is-following:hover { background: #e5e5e5; }
+.story-viewer-follow .shared-spinner { width: 16px; height: 16px; border-color: rgb(255 255 255 / 40%); border-top-color: currentColor; }
+.story-viewer-follow.is-following .shared-spinner { border-color: #d5d5d5; border-top-color: currentColor; }
+.story-viewer-follow-error { grid-column: 1 / -1; padding-top: 6px; font-size: 11px; color: #b3261e; }
+
+.story-viewers-list > p,
+.story-viewers-loading {
+  margin: 0;
+  display: flex;
+  justify-content: center;
+  padding: 28px 16px;
+  color: #737373;
+  text-align: center;
+  font-size: 13px;
+}
+
+.story-viewers-loading .shared-spinner { width: 24px; height: 24px; border-color: #dedede; border-top-color: #737373; }
+.story-viewers-error { display: grid; justify-items: center; gap: 8px; padding: 20px 12px; color: #666; text-align: center; font-size: 13px; }
+.story-viewers-more,
+.story-viewers-retry { width: 100%; min-height: 42px; display: flex; align-items: center; justify-content: center; gap: 7px; font-size: 13px !important; font-weight: 600 !important; }
+.story-viewers-more:hover,
+.story-viewers-retry:hover { background: #f5f5f5; border-radius: 8px; }
+
+@media (max-width: 767px) {
+  /* Avoid input-focus zoom on mobile Safari. */
+  .story-viewers-search input { font-size: 16px; }
+}
+
+@container story-viewers (max-width: 360px) {
+  .story-viewer-profile { gap: 8px; }
+  .story-viewer-profile .story-viewer-avatar { flex-basis: 42px; width: 42px; height: 42px; }
+  .story-viewers-panel .story-viewer-follow { min-width: 74px; padding-inline: 8px; font-size: 11px; }
+}
+
+@media (max-height: 500px) {
+  .story-viewers-panel { height: 88%; }
+  .story-viewers-toolbar { padding-top: 10px; gap: 8px; }
+}
+
+@keyframes storyViewersFade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes storyViewersRise { from { transform: translateY(18px); } to { transform: translateY(0); } }
+@media (prefers-reduced-motion: reduce) {
+  .story-viewers-backdrop,
+  .story-viewers-panel { animation-duration: 1ms; }
+}

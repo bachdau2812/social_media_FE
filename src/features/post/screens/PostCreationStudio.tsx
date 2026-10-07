@@ -13,6 +13,7 @@ import {
 } from "../../../shared/music";
 import { emitAppToast } from "../../../shared/notifications/appToast";
 import { useBodyScrollLock } from "../../../shared/overlays/useBodyScrollLock";
+import { useEditorExitGuard } from '../../../shared/overlays/useEditorExitGuard';
 import { DEFAULT_POST_MEDIA_RATIO, POST_MEDIA_RATIOS, postMediaRatioValue, type PostMediaRatio } from "../model/postMediaRatio";
 import { postApi } from "../api/post.api";
 import { buildCreatePostRequest, buildPostDraftRequest, uploadPostMedia, type MusicSelection, type PostCreationMedia } from "../creation/postCreation";
@@ -21,6 +22,7 @@ type DraftSummary = { id: string; draftType: string; thumbnailUrl?: string; medi
 type PostDraftSaveRequest = Omit<ReturnType<typeof buildPostDraftRequest>, "id"> & { id: string | null };
 type CreateStep = 1 | 2 | 3 | 4;
 type PublishStatus = "idle" | "uploading" | "processing" | "publishing" | "success" | "failure" | "draft";
+const MEDIA_POST_SUBMITTED_MESSAGE = "Bài viết đã được gửi và đang chờ kiểm duyệt.";
 type MediaItem = PostCreationMedia & {
   url: string;
   status: "ready" | "processing" | "failed";
@@ -166,6 +168,8 @@ export function PostCreationStudio({ userId, onBack, onClose, onDraftSaved, onSa
     : media.every((item) => !item.music || (item.musicStart >= 0 && item.musicEnd > item.musicStart));
   const ready = media.length > 0 && media.every((item) => item.status === "ready") && musicValid;
   const hasUnsaved = media.length > 0 || Boolean(caption || hashtags || sharedMusic || itemMusicCount);
+  const allowExit = useEditorExitGuard(hasUnsaved && status !== 'success', 'Discard your unsaved post changes?');
+  function closeEditor() { allowExit(); onClose(); }
 
   function defaultEnd(track: MusicDto | MusicSelection) {
     return Math.max(1, Math.min(30, Math.floor((track.duration ?? 0) > 0 ? track.duration ?? 30 : 30)));
@@ -187,7 +191,7 @@ export function PostCreationStudio({ userId, onBack, onClose, onDraftSaved, onSa
       setShowUnsaved(true);
       return;
     }
-    onClose();
+    closeEditor();
   }
 
   function addFiles(files: FileList | File[]) {
@@ -351,6 +355,7 @@ export function PostCreationStudio({ userId, onBack, onClose, onDraftSaved, onSa
 
   async function saveDraft() {
     setStatus("uploading");
+    try {
     const uploads = await uploadPostMedia(media, uploadCloudinaryMedia);
     const draft = {
       id: initialDraft?.id ?? `draft_${Date.now()}`,
@@ -359,12 +364,17 @@ export function PostCreationStudio({ userId, onBack, onClose, onDraftSaved, onSa
       captionPreview: caption || "Empty draft",
       updatedAt: new Date().toISOString()
     };
-    onDraftSaved(draft);
-    setStatus("draft");
     await onSaveDraft({
       ...buildPostDraftRequest({ userId, caption, hashtags, mediaRatio, sharedMusic, sharedStart, sharedEnd, media }, uploads),
       id: initialDraft?.id ?? null,
-    }).catch(() => setStatus("failure"));
+    });
+    onDraftSaved(draft);
+    setStatus("draft");
+    return true;
+    } catch {
+      setStatus('failure');
+      return false;
+    }
   }
 
   async function publish() {
@@ -379,9 +389,10 @@ export function PostCreationStudio({ userId, onBack, onClose, onDraftSaved, onSa
       const response = await postApi.create(request);
       setStatus("success");
       stopPreview();
-      emitAppToast(response.message || "Bài viết đang được xử lý và sẽ sớm hiển thị.");
+      emitAppToast(media.length ? MEDIA_POST_SUBMITTED_MESSAGE : response.message || "Bài viết đang được xử lý và sẽ sớm hiển thị.");
+      allowExit();
       onPublished();
-      onClose();
+      closeEditor();
     } catch (error) {
       setStatus("failure");
       const message = error instanceof Error ? error.message : "Không thể đăng bài viết.";
@@ -517,12 +528,12 @@ export function PostCreationStudio({ userId, onBack, onClose, onDraftSaved, onSa
       </main>
 
       <footer className="post-create-footer centered-actions">
-        <div><button type="button" onClick={() => step === 1 ? onBack() : setStep((value) => Math.max(1, value - 1) as CreateStep)}>Back</button>{step < 4 ? <button type="button" onClick={() => setStep((value) => Math.min(4, value + 1) as CreateStep)} disabled={step === 1 && !ready}>Next</button> : <button type="button" onClick={() => void publish()} disabled={!ready || status === "publishing"}><Send size={18} /> Publish</button>}</div>
+        <div><button type="button" onClick={() => { if (step !== 1) setStep((value) => Math.max(1, value - 1) as CreateStep); else if (hasUnsaved) setShowUnsaved(true); else { allowExit(); onBack(); } }}>Back</button>{step < 4 ? <button type="button" onClick={() => setStep((value) => Math.min(4, value + 1) as CreateStep)} disabled={step === 1 && !ready}>Next</button> : <button type="button" onClick={() => void publish()} disabled={!ready || status === "publishing"}><Send size={18} /> Publish</button>}</div>
       </footer>
 
       {pendingSharedTrack && <div className="music-mode-dialog-backdrop" role="dialog" aria-modal="true"><div className="music-mode-dialog"><Music2 size={21} /><strong>Use one track for the complete post?</strong><p>Selecting shared music will replace the individual music presentation for this post.</p><div><button type="button" onClick={() => setPendingSharedTrack(null)}>Cancel</button><button type="button" onClick={() => applySharedTrack(pendingSharedTrack)}>Use shared music</button></div></div></div>}
       {toast && <div className="music-mode-toast">{toast}</div>}
-      {showUnsaved && <div className="unsaved-warning"><div><strong>Unsaved changes warning</strong><span>Your post has unsaved work.</span><button type="button" onClick={() => setShowUnsaved(false)}>Keep editing</button><button type="button" onClick={() => void saveDraft().then(onClose)}><Archive size={16} /> Save draft</button><button type="button" onClick={onClose}>Discard</button></div></div>}
+      {showUnsaved && <div className="unsaved-warning"><div><strong>Unsaved changes warning</strong><span>Your post has unsaved work.</span><button type="button" onClick={() => setShowUnsaved(false)}>Keep editing</button><button type="button" onClick={() => void saveDraft().then(saved => { if (saved) closeEditor(); })}><Archive size={16} /> Save draft</button><button type="button" onClick={closeEditor}>Discard</button></div></div>}
     </div>
   </section>;
 }

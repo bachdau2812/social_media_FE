@@ -4,6 +4,8 @@ import { ChatAttachmentTray, ChatVoiceComposerState } from "./ChatMediaExperienc
 import { EmojiPickerControl } from "./EmojiPickerControl";
 import type { useChatController } from "../hooks/useChatController";
 
+import { useMediaQuery } from "../../../shared/hooks/useMediaQuery";
+
 type Controller = ReturnType<typeof useChatController>;
 
 function replyText(controller: Controller) {
@@ -16,6 +18,7 @@ function replyText(controller: Controller) {
 }
 
 export function ChatComposer({ controller, compact = false }: { controller: Controller; compact?: boolean }) {
+  const mobile = useMediaQuery("(max-width: 767px)");
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
   const media = controller.mediaComposer;
@@ -24,7 +27,7 @@ export function ChatComposer({ controller, compact = false }: { controller: Cont
   const canSend = Boolean(controller.draft.trim() || media.images.length || media.audioAttachment) && !disabled && !media.recording;
 
   function sendOnEnter(event: React.KeyboardEvent<HTMLTextAreaElement>) {
-    if (event.key !== "Enter" || event.shiftKey || event.nativeEvent.isComposing) return;
+    if (mobile || event.key !== "Enter" || event.shiftKey || event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) return;
     event.preventDefault();
     if (canSend) void controller.send();
   }
@@ -55,7 +58,7 @@ export function ChatComposer({ controller, compact = false }: { controller: Cont
     {composerError && <p className="chat-composer-error" role="alert">{composerError}</p>}
     <div className={`chat-composer-actions ${compact ? "compact floating-composer-row" : "full dm-composer-box"}`}>
       <input ref={fileRef} type="file" accept="image/*" multiple hidden onChange={(event) => { media.selectImages(event.target.files); event.currentTarget.value = ""; window.requestAnimationFrame(() => textareaRef.current?.focus()); }} />
-      <button type="button" onClick={() => fileRef.current?.click()} disabled={disabled || media.recording} aria-label="Đính kèm ảnh"><Paperclip size={compact ? 17 : 19} /></button>
+      <button type="button" className="chat-attachment-shortcut" onClick={() => fileRef.current?.click()} disabled={disabled || media.recording} aria-label="Đính kèm ảnh"><Paperclip size={compact ? 17 : 19} /></button>
       <EmojiPickerControl textareaRef={textareaRef} value={controller.draft} onChange={controller.setDraft} disabled={disabled || media.recording} iconSize={compact ? 17 : 19} />
       <textarea
         ref={textareaRef}

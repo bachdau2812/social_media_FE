@@ -17,6 +17,7 @@ export function usePostRoute(postId: string | undefined, viewerId: string | unde
   const cacheViewer = useRef(viewerId);
   useLayoutEffect(() => {
     if (cacheViewer.current !== viewerId) {
+      postApi.clearSurfaceDetailCache();
       cache.current.clear();
       cacheViewer.current = viewerId;
       seedRef.current = [];

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canonicalAppPath, destinationPath, readAppRoute } from "./appRoute";
+import { canonicalAppPath, destinationPath, isResourceRoute, readAppRoute } from "./appRoute";
 
 const location = (url: string) => { const parsed = new URL(url, "https://example.test"); return { pathname: parsed.pathname, search: parsed.search }; };
 
@@ -39,5 +39,11 @@ describe("resource URLs", () => {
 
   it("leaves a canonical resource URL intact", () => {
     expect(canonicalAppPath(location("/post/post-1?commentId=c-2"))).toBeNull();
+  });
+
+  it("reads a profile timeline as a screen with a selected entry anchor", () => {
+    const route = readAppRoute(location("/profile/user%20one/posts/post%2Ftwo"));
+    expect(route).toMatchObject({ view: "profile", known: true, profileUserId: "user one", profileFeedPostId: "post/two" });
+    expect(isResourceRoute(route)).toBe(false);
   });
 });

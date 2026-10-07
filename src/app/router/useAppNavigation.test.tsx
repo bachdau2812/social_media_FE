@@ -14,6 +14,8 @@ function Harness() {
     <button onClick={nav.back}>Back</button>
     <button onClick={() => nav.navigate(1)}>Forward</button>
     <button onClick={() => nav.navigate(-1)}>Browser back</button>
+    <button onClick={() => nav.navigate(nav.location.pathname + nav.location.search, { state: { ...nav.location.state, localSheet: { id: "likes", parentKey: nav.location.key } } })}>Sheet</button>
+    <button onClick={() => nav.go("/profile/u-1/posts/p-1")}>Timeline</button>
   </>;
 }
 beforeEach(() => vi.spyOn(window, "scrollTo").mockImplementation(() => {}));
@@ -70,4 +72,21 @@ it("restores the background scroll position after a post closes", async () => {
   fireEvent.click(screen.getByText("Close"));
   await act(async () => {});
   expect(window.scrollTo).toHaveBeenLastCalledWith({ top: 430, behavior: "auto" });
+});
+
+it("keeps screen scroll when same-URL sheet history opens and closes", () => {
+  vi.spyOn(window, "scrollY", "get").mockReturnValue(640);
+  render(<MemoryRouter initialEntries={["/"]}><Harness /></MemoryRouter>);
+  fireEvent.scroll(window);
+  vi.mocked(window.scrollTo).mockClear();
+  fireEvent.click(screen.getByText("Sheet"));
+  expect(window.scrollTo).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByText("Browser back"));
+  expect(window.scrollTo).not.toHaveBeenCalled();
+});
+
+it("returns a directly loaded profile timeline to its profile grid", () => {
+  render(<MemoryRouter initialEntries={["/profile/u-1/posts/p-1"]}><Harness /></MemoryRouter>);
+  fireEvent.click(screen.getByText("Back"));
+  expect(screen.getByTestId("url")).toHaveTextContent(/^\/profile\/u-1$/);
 });

@@ -1,7 +1,8 @@
 import type { PostMedia } from "../model/post.types";
 import { adjacentPostMedia } from "../model/adjacentPostMedia";
 
-export function AdjacentPostMediaPreloads({ media, activeIndex }: { media: PostMedia[]; activeIndex: number }) {
+export function AdjacentPostMediaPreloads({ media, activeIndex, enabled = true }: { media: PostMedia[]; activeIndex: number; enabled?: boolean }) {
+  if (!enabled) return null;
   return (
     <div className="post-adjacent-preloads" aria-hidden="true">
       {adjacentPostMedia(media, activeIndex).map((item) => item.type === "VIDEO"

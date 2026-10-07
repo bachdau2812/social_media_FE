@@ -1,7 +1,11 @@
-import { Archive, Briefcase, Check, ChevronRight, ExternalLink, GraduationCap, House, Library, Link2, MapPin, PenLine, Plus, RefreshCw, Search, Trash2, User, Users, Video, WifiOff, X, type LucideIcon } from "lucide-react";
+import { Archive, Briefcase, Check, ChevronRight, ExternalLink, GraduationCap, House, Library, Link2, LoaderCircle, MapPin, PenLine, Plus, RefreshCw, Search, Trash2, User, Users, Video, WifiOff, X, type LucideIcon } from "lucide-react";
 import { type ReactNode, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { Avatar as SharedAvatar } from "../../../shared/components";
+import { MobileSheet } from "../../../shared/overlays/MobileSheet";
+import { useLocalSheetHistory } from "../../../shared/overlays/useLocalSheetHistory";
+import { useMediaQuery } from "../../../shared/hooks/useMediaQuery";
+import { useVisualViewportSurface } from "../../../shared/hooks/useVisualViewportSurface";
 import { useBodyScrollLock } from "../../../shared/overlays/useBodyScrollLock";
 import { StoryHighlights, type StoryHighlightDto } from "../../story";
 import type { Post } from "../../post";
@@ -108,9 +112,12 @@ function ProfileConnectionActions({ viewerId, profile, onMessage, onOpenProfile,
     <SimilarUsersSection open={similarOpen} profileId={profile.id} loadUsers={loadSimilar} onSelectUser={(user) => void onOpenProfile(user.id)} onFollow={followSimilar} onUnfollow={unfollowSimilar} onClose={() => setSimilarOpen(false)}/>
   </div>;
 }
-export function ProfileScreen({ viewerId, profile, onSelectPost, onOpenStoryHighlight, onOpenArchive, onOpenConnections, onRefresh, onMessage, onOpenProfile }: {
+export function ProfileScreen({ viewerId, profile, loading = false, activeTab: controlledActiveTab, onActiveTabChange, onSelectPost, onOpenStoryHighlight, onOpenArchive, onOpenConnections, onRefresh, onMessage, onOpenProfile }: {
     viewerId: string;
     profile: Profile | null;
+    loading?: boolean;
+    activeTab?: "POSTS" | "REPOSTS";
+    onActiveTabChange?: (tab: "POSTS" | "REPOSTS") => void;
     onSelectPost: (post: Post) => void;
     onOpenStoryHighlight: (highlight: StoryHighlightDto) => void;
     onOpenArchive: () => void;
@@ -119,9 +126,13 @@ export function ProfileScreen({ viewerId, profile, onSelectPost, onOpenStoryHigh
     onMessage: (userId: string) => Promise<void>;
     onOpenProfile: (userId: string) => Promise<void>;
 }) {
-    const [activeTab, setActiveTab] = useState<"POSTS" | "REPOSTS">("POSTS");
+    const [localActiveTab, setLocalActiveTab] = useState<"POSTS" | "REPOSTS">("POSTS");
+    const activeTab = controlledActiveTab ?? localActiveTab;
+    const setActiveTab = (tab: "POSTS" | "REPOSTS") => { setLocalActiveTab(tab); onActiveTabChange?.(tab); };
     const [aboutOpen, setAboutOpen] = useState(false);
     const [editorOpen, setEditorOpen] = useState(false);
+    if (!profile && loading)
+        return <section className="screen profile-screen" aria-busy="true"><div className="profile-loading screen-loading-indicator" role="status" aria-label="Đang tải trang cá nhân"><LoaderCircle size={36} aria-hidden="true" /></div></section>;
     if (!profile)
         return <section className="screen"><EmptyState icon={User} title="Profile not loaded" action="Open profile again"/></section>;
     const ownProfile = profile.id === viewerId;
@@ -170,10 +181,11 @@ function ProfileAboutPanel({ profile, onClose }: {
     onClose: () => void;
 }) {
     useBodyScrollLock(true);
+    const viewportStyle = useVisualViewportSurface(!useMediaQuery("(min-width: 768px)"));
     const jobs = profile.jobs.filter((item) => item.isPublic);
     const universities = profile.universities.filter((item) => item.isPublic);
     const highSchools = profile.highSchools.filter((item) => item.isPublic);
-    return createPortal(<div className="profile-info-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget)
+    return createPortal(<div style={viewportStyle} className="profile-info-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget)
         onClose(); }}><section className="profile-about-panel" role="dialog" aria-modal="true" aria-label="Thông tin giới thiệu"><header><div><strong>Thông tin giới thiệu</strong></div><button className="icon-button" onClick={onClose} aria-label="Đóng"><X size={20}/></button></header><div className="profile-about-body">
     {(profile.currentCity || profile.hometown) && <section><h3>Nơi sống</h3>{profile.currentCity && <div className="about-row"><MapPin size={18}/><span>Sống tại <strong>{profile.currentCity}</strong></span></div>}{profile.hometown && <div className="about-row"><House size={18}/><span>Đến từ <strong>{profile.hometown}</strong></span></div>}</section>}
     {jobs.length > 0 && <section><h3>Công việc</h3><div className="about-timeline">{jobs.map((job) => <div key={job.id}><Briefcase size={18}/><span><strong>{job.position || "Công việc"}</strong>{job.companyName && <small>{job.companyName}</small>}{profileDateRange(job.fromDate, job.toDate) && <small>{profileDateRange(job.fromDate, job.toDate)}</small>}</span></div>)}</div></section>}
@@ -200,6 +212,7 @@ function ProfileInformationEditor({ profile, onClose, onSaved }: {
     onSaved: () => Promise<void>;
 }) {
     useBodyScrollLock(true);
+    const viewportStyle = useVisualViewportSurface(!useMediaQuery("(min-width: 768px)"));
     const [currentCity, setCurrentCity] = useState(profile.currentCity || "");
     const [hometown, setHometown] = useState(profile.hometown || "");
     const [hobbies, setHobbies] = useState(profile.hobbies.join(", "));
@@ -240,7 +253,7 @@ function ProfileInformationEditor({ profile, onClose, onSaved }: {
     async function toggleJob(item: Profile["jobs"][number]) { await commit(() => profileApi.setRecordVisibility("JOB", item.id, !item.isPublic)); }
     async function toggleUniversity(item: Profile["universities"][number]) { await commit(() => profileApi.setRecordVisibility("UNIVERSITY", item.id, !item.isPublic)); }
     async function toggleHighSchool(item: Profile["highSchools"][number]) { await commit(() => profileApi.setRecordVisibility("HIGH_SCHOOL", item.id, !item.isPublic)); }
-    return createPortal(<div className="profile-info-backdrop"><section className="profile-editor-panel" role="dialog" aria-modal="true" aria-label="Chỉnh sửa thông tin"><header><div><strong>Chỉnh sửa thông tin</strong></div><button className="icon-button" onClick={onClose} aria-label="Đóng"><X size={20}/></button></header><div className="profile-editor-body">
+    return createPortal(<div style={viewportStyle} className="profile-info-backdrop"><section className="profile-editor-panel" role="dialog" aria-modal="true" aria-label="Chỉnh sửa thông tin"><header><div><strong>Chỉnh sửa thông tin</strong></div><button className="icon-button" onClick={onClose} aria-label="Đóng"><X size={20}/></button></header><div className="profile-editor-body">
     <section><h3>Nơi sống</h3><label><span>Thành phố hiện tại</span><input value={currentCity} onChange={(event) => setCurrentCity(event.target.value)} placeholder="Đà Nẵng"/></label><label><span>Quê quán</span><input value={hometown} onChange={(event) => setHometown(event.target.value)} placeholder="TP. Hồ Chí Minh"/></label><label><span>Sở thích</span><input value={hobbies} onChange={(event) => setHobbies(event.target.value)} placeholder="Photography, Football"/></label><button className="profile-editor-save" disabled={busy} onClick={() => void commit(() => profileApi.updateBasicDetails({ userId: profile.id, livingIn: currentCity.trim(), homeTown: hometown.trim(), hobbieList: hobbies.split(",").map((item) => item.trim()).filter(Boolean) }))}>Lưu thông tin cơ bản</button></section>
     <ProfileEditorSection title="Công việc" onAdd={() => newEntry("JOB")}>{profile.jobs.map((item) => <ProfileEditorRow key={item.id} icon={Briefcase} title={profileJobLabel(item)} detail={profileDateRange(item.fromDate, item.toDate)} visible={item.isPublic} onToggle={() => void toggleJob(item)} onEdit={() => editJob(item)} onDelete={() => void remove("JOB", item.id)}/>)}</ProfileEditorSection>
     <ProfileEditorSection title="Đại học" onAdd={() => newEntry("UNIVERSITY")}>{profile.universities.map((item) => <ProfileEditorRow key={item.id} icon={GraduationCap} title={profileUniversityLabel(item)} detail={profileDateRange(item.from, item.to)} visible={item.isPublic} onToggle={() => void toggleUniversity(item)} onEdit={() => editUniversity(item)} onDelete={() => void remove("UNIVERSITY", item.id)}/>)}</ProfileEditorSection>
@@ -280,6 +293,8 @@ export function ConnectionsModal({ viewerId, profile, activeTab, onTabChange, on
     onRelationshipRemoved: (tab: ConnectionTab, row: ConnectionUserDto) => void;
 }) {
     useBodyScrollLock(true);
+    const mobile = !useMediaQuery("(min-width: 768px)");
+    const dismiss = useLocalSheetHistory("connections", onClose, mobile);
     const [query, setQuery] = useState("");
     const [sort, setSort] = useState<"RECENT" | "NAME">("RECENT");
     const [confirmTarget, setConfirmTarget] = useState<{
@@ -287,8 +302,14 @@ export function ConnectionsModal({ viewerId, profile, activeTab, onTabChange, on
         kind: "REMOVE_FOLLOWER" | "UNFOLLOW";
     } | null>(null);
     const [actionPending, setActionPending] = useState(false);
+    useEffect(() => {
+        if (!confirmTarget) return;
+        const trigger = document.activeElement as HTMLElement | null;
+        document.querySelector<HTMLElement>(".connection-confirm-dialog button")?.focus();
+        return () => { if (trigger?.isConnected) trigger.focus({ preventScroll: true }); };
+    }, [confirmTarget]);
     const ownProfile = profile?.id === viewerId;
-    const { rows, state, error, load: loadConnections, changeRelationship, removeRelationship } = useProfileConnections({
+    const { rows, state, error, hasMore, loadingMore, loadMore, load: loadConnections, changeRelationship, removeRelationship } = useProfileConnections({
         profileId: profile?.id,
         viewerId,
         tab: activeTab,
@@ -310,11 +331,11 @@ export function ConnectionsModal({ viewerId, profile, activeTab, onTabChange, on
             if (confirmTarget)
                 setConfirmTarget(null);
             else
-                onClose();
+                dismiss();
         }
         document.addEventListener("keydown", closeOnEscape);
         return () => document.removeEventListener("keydown", closeOnEscape);
-    }, [confirmTarget, onClose]);
+    }, [confirmTarget, dismiss]);
     async function handleRelationship(row: ConnectionUserDto) {
         try {
             await changeRelationship(row);
@@ -323,7 +344,7 @@ export function ConnectionsModal({ viewerId, profile, activeTab, onTabChange, on
             window.dispatchEvent(new CustomEvent("app-toast", { detail: "Không thể cập nhật mối quan hệ. Vui lòng thử lại." }));
             return;
         }
-        void loadConnections();
+
     }
     async function confirmRelationshipRemoval() {
         if (!profile || !confirmTarget || actionPending)
@@ -346,15 +367,15 @@ export function ConnectionsModal({ viewerId, profile, activeTab, onTabChange, on
     }
     if (!profile)
         return null;
-    return <div className="connections-modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget)
-        onClose(); }}>
-    <section className="connections-modal" role="dialog" aria-modal="true" aria-label={`${profile.username} connections`}>
+    const content = <div className="connections-modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget)
+        if (!confirmTarget) dismiss(); }}>
+    <section className="connections-modal" role={mobile ? undefined : "dialog"} aria-modal={mobile ? undefined : true} aria-label={`${profile.username} connections`}>
       <header className="connections-modal-header">
         <div>
           <strong>{profile.displayName}</strong>
           <small>@{profile.username}</small>
         </div>
-        <button className="icon-button" onClick={onClose} aria-label="Close connections"><X size={20}/></button>
+        <button className="icon-button" onClick={() => dismiss()} aria-label="Close connections"><X size={20}/></button>
       </header>
       <div className="connections-tabs" role="tablist">
         {tabs.map((tab) => <button key={tab.id} role="tab" aria-selected={activeTab === tab.id} className={activeTab === tab.id ? "active" : ""} onClick={() => onTabChange(tab.id)}>{tab.label}</button>)}
@@ -371,7 +392,7 @@ export function ConnectionsModal({ viewerId, profile, activeTab, onTabChange, on
                 const ownFollowerAction = ownProfile && activeTab === "FOLLOWERS";
                 const ownFollowingAction = ownProfile && activeTab === "FOLLOWING";
                 return <div key={`${row.userId}-${row.id}`} className="connection-row simple">
-            <button className="connection-identity" onClick={() => void onOpenProfile(row.userId)}>
+            <button className="connection-identity" onClick={() => dismiss(() => { void onOpenProfile(row.userId); })}>
               <Avatar src={row.avatarUrl || ""} label={row.username}/>
               <span><strong>{row.displayName}</strong><small>@{row.username}</small>{row.mutualContext && <em>{row.mutualContext}</em>}</span>
             </button>
@@ -381,10 +402,13 @@ export function ConnectionsModal({ viewerId, profile, activeTab, onTabChange, on
           </div>;
             })}
       </div>}
+      {state === "ready" && error && <div className="connection-state" role="alert"><span>{error}</span><button onClick={() => void loadMore()}>Retry</button></div>}
+      {state === "ready" && hasMore && !error && <button className="connections-load-more" disabled={loadingMore} onClick={() => void loadMore()}>{loadingMore ? "Loading connections?" : "Load more connections"}</button>}
     </section>
     {confirmTarget && <div className="connection-confirm-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget && !actionPending)
             setConfirmTarget(null); }}>
-      <section className="connection-confirm-dialog" role="alertdialog" aria-modal="true" aria-label={confirmTarget.kind === "REMOVE_FOLLOWER" ? "Remove follower" : "Unfollow user"}>
+      <section onKeyDown={event => { if (event.key === "Escape") { event.stopPropagation(); if (!actionPending) setConfirmTarget(null); }
+        if (event.key === "Tab") { event.stopPropagation(); const buttons = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>("button:not(:disabled)")); const first = buttons[0], last = buttons[buttons.length - 1]; if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); } else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); } } }} className="connection-confirm-dialog" role="alertdialog" aria-modal="true" aria-label={confirmTarget.kind === "REMOVE_FOLLOWER" ? "Remove follower" : "Unfollow user"}>
         <Avatar src={confirmTarget.row.avatarUrl || ""} label={confirmTarget.row.username}/>
         <p>{confirmTarget.kind === "REMOVE_FOLLOWER" ? `${confirmTarget.row.username} sẽ không biết bạn đã xóa họ khỏi danh sách.` : `Xác nhận bỏ theo dõi ${confirmTarget.row.username}?`}</p>
         <div className="connection-confirm-actions">
@@ -394,6 +418,7 @@ export function ConnectionsModal({ viewerId, profile, activeTab, onTabChange, on
       </section>
     </div>}
   </div>;
+    return mobile ? <MobileSheet title="" ariaLabel="Connections" closeLabel="Close connections" className="profile-connections-sheet" onClose={() => { if (confirmTarget) { if (!actionPending) setConfirmTarget(null); } else dismiss(); }}>{content}</MobileSheet> : content;
 }
 function ConnectionsSkeleton() { return <div className="connections-list loading" aria-label="Loading connections">{Array.from({ length: 6 }).map((_, index) => <div key={index} className="connection-row skeleton"><span /><div><i /><i /></div><b /></div>)}</div>; }
 function ConfirmDialog({ title, detail, onCancel, onConfirm }: {

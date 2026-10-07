@@ -1,13 +1,15 @@
 import { ChevronLeft } from "lucide-react";
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useViewportMode } from "../shared/hooks/useViewportMode";
+import { useVisualViewportSurface } from "../shared/hooks/useVisualViewportSurface";
+import { useBodyScrollLock } from "../shared/overlays/useBodyScrollLock";
 import type { ViewKey } from "./router/navigation.types";
-import { type Post, usePostMutationController } from "../features/post";
+import { type Post, usePostMutationController, postApi } from "../features/post";
 import { applyConnectionRemoval, type ConnectionTab, type ConnectionUserDto, type Profile, useProfileController } from "../features/profile";
 import { archivedStoryToItem, type StoryArchiveDto, type StoryItem } from "../features/story";
 import { ChatScreen, FloatingMessenger, chatApi, useChatUnreadCount, type ChatNavigationTarget } from "../features/chat";
 import { NotificationScreen as FeatureNotificationScreen, refreshNotificationUnreadCount, startForegroundPushNotifications, stopForegroundPushNotifications, syncGrantedPushRegistration, unregisterPushDevice, useNotificationUnreadCount } from "../features/notification";
-import { ConnectionsModal, ProfileScreen } from "../features/profile";
+import { ConnectionsModal, ProfileScreen, ProfileFeedScreen, useProfilePostCollection } from "../features/profile";
 import { CreateContentMenu } from "./components/CreateContentMenu";
 import { consumePendingNotificationDestination, decodeNotificationDeepLink, savePendingNotificationDestination, subscribeToNotificationNavigation, type AppDestination } from "../features/notification";
 import { StoryCreatorStudio, StoryViewer, orderStoryQueue, storyApi, storyStartIndex, useStorySeenState, type StoryHighlightDto } from "../features/story";
@@ -50,11 +52,15 @@ const MOBILE_VIEW_TITLES: Record<ViewKey, string> = {
     chat: "Tin nhắn",
     states: "Trạng thái hệ thống",
 };
+const SETTINGS_TITLES: Record<string, string> = { appearance: "Ngôn ngữ và giao diện", privacy: "Trang cá nhân và quyền riêng tư", posts: "Bài viết", feed: "Bảng tin và nội dung", messages: "Tin nhắn", notifications: "Thông báo" };
 
 function FeatureLoading() {
     return <div className="app-route-fallback" role="status" aria-label="Đang tải"><span/><span/><span/></div>;
 }
 type LoadState = "idle" | "loading" | "ready" | "error";
+function screenDataKey(view: ViewKey, userId: string | undefined, tab: "DISCOVER" | "FRIENDS", profileId?: string) {
+    return JSON.stringify([userId, view, view === "home" ? tab : view === "profile" ? profileId ?? userId : null]);
+}
 const ACTIVE_FEED_TAB_STORAGE_KEY = "social-media-active-feed-tab";
 function readStoredFeedTab(): "DISCOVER" | "FRIENDS" {
     try {
@@ -72,16 +78,22 @@ export default function SocialApplication() {
     const profileUserId = navigation.screen.profileUserId ?? session?.userId;
     const [feedTab, setFeedTab] = useState<"DISCOVER" | "FRIENDS">(readStoredFeedTab);
     const feedScrollPositions = useRef<Record<"DISCOVER" | "FRIENDS", number>>({ DISCOVER: 0, FRIENDS: 0 });
+    const pendingFeedScroll = useRef<"DISCOVER" | "FRIENDS" | null>(null);
     const feed = useFeedController();
     const { posts, stories, hasMore: feedHasMore, loadingMore: feedLoadingMore, setPosts } = feed;
     const storyRoute = useStoryRoute(navigation.route.story, session?.userId);
     const selectedStoryIndex = storyRoute.index;
     const setSelectedStoryIndex = storyRoute.setIndex;
     const [profile, setProfile] = useState<Profile | null>(null);
+    const profileSummaries = useRef(new Map<string, Profile>());
+    const [profileTabs, setProfileTabs] = useState<Record<string, "POSTS" | "REPOSTS">>({});
     const [connectionTab, setConnectionTab] = useState<ConnectionTab>("FOLLOWERS");
     const [connectionsOpen, setConnectionsOpen] = useState(false);
     const [editingPost, setEditingPost] = useState<Post | null>(null);
-    const [status, setStatus] = useState<LoadState>("idle");
+    const [screenLoad, setScreenLoad] = useState<{ key: string | null; status: LoadState }>({ key: null, status: "idle" });
+    const currentScreenKey = screenDataKey(view, session?.userId, feedTab, profileUserId);
+    // A new destination is loading immediately, before its request effect runs.
+    const status: LoadState = screenLoad.key === currentScreenKey ? screenLoad.status : "loading";
     const [errorText, setErrorText] = useState("");
     const { showToast: showAppToast } = useToast();
     const { loadSummary: loadProfileSummary } = useProfileController(session?.userId);
@@ -95,6 +107,14 @@ export default function SocialApplication() {
     const chatUnreadCount = useChatUnreadCount(session?.userId);
     const notificationUnreadCount = useNotificationUnreadCount(session?.userId);
     const viewportMode = useViewportMode();
+    const mobileConversation = viewportMode === "mobile" && view === "chat" && Boolean(navigation.screen.chatTarget?.conversationId);
+    const conversationViewportStyle = useVisualViewportSurface(mobileConversation);
+    const profileCollection = useProfilePostCollection({ viewerId: session?.userId, profileId: profileUserId,
+        selectedPostId: navigation.screen.profileFeedPostId, enabled: view === "profile" && Boolean(navigation.screen.profileFeedPostId) });
+    useEffect(() => {
+        if (!session?.userId) { profileSummaries.current.clear(); setProfileTabs({}); }
+        else if (profile) profileSummaries.current.set(`${session.userId}:${profile.id}`, profile);
+    }, [profile, session?.userId]);
     const [createMenuOpen, setCreateMenuOpen] = useState(false);
     const [miniChatRequest, setMiniChatRequest] = useState<(ChatNavigationTarget & {
         nonce: number;
@@ -102,14 +122,16 @@ export default function SocialApplication() {
     const storyCreatorOpen = Boolean(navigation.route.createStory);
     const [resumeDraft, setResumeDraft] = useState<DraftResumeIntent | null>(null);
     const { seenStoryIds, recentlySeenStoryIds, markSeen } = useStorySeenState(session?.userId);
+    useEffect(() => { postApi.clearSurfaceDetailCache(); }, [session?.userId]);
     const fullChatTarget = navigation.screen.chatTarget ?? null;
     const activeConversationId = fullChatTarget?.conversationId;
     const storyViewerStories = storyRoute.stories;
     const setStoryViewerStories = storyRoute.setStories;
     const targetCommentId = navigation.route.commentId ?? null;
     const { post: selectedPost, setPost: setSelectedPost, error: postRouteError, retry: retryPostRoute } = usePostRoute(
-        navigation.route.postId, session?.userId, [...posts, ...(profile?.posts ?? []), ...(profile?.reposts ?? [])],
+        navigation.route.postId, session?.userId, [...profileCollection.posts, ...posts, ...(profile?.posts ?? []), ...(profile?.reposts ?? [])],
     );
+    useBodyScrollLock(mobileConversation || Boolean((navigation.route.postId && !selectedPost) || (navigation.route.story && selectedStoryIndex === null)));
     const activePostId = selectedPost?.id;
     const screenRequestVersion = useRef(0);
     const loadedFeedKey = useRef<string | null>(null);
@@ -188,7 +210,8 @@ export default function SocialApplication() {
     }, [feedTab]);
     const loadScreenData = useCallback(async (target: ViewKey, userId: string, tab: "DISCOVER" | "FRIENDS", reuseFeed = false) => {
         const version = ++screenRequestVersion.current;
-        setStatus("loading");
+        const requestKey = screenDataKey(target, userId, tab, profileUserId);
+        setScreenLoad({ key: requestKey, status: "loading" });
         setErrorText("");
         try {
             if (target === "home") {
@@ -196,16 +219,17 @@ export default function SocialApplication() {
                 if (!reuseFeed || loadedFeedKey.current !== key) {
                     await loadFeed(userId, tab);
                     if (version === screenRequestVersion.current) loadedFeedKey.current = key;
-                }
+                } else invalidateFeed(); // Stop a pending tab response from overwriting cached posts.
             } else invalidateFeed();
             if (target === "profile") {
-                const data = await loadProfileSummary(profileUserId ?? userId, userId);
+                const cacheKey = `${userId}:${profileUserId ?? userId}`;
+                const data = reuseFeed ? profileSummaries.current.get(cacheKey) ?? await loadProfileSummary(profileUserId ?? userId, userId) : await loadProfileSummary(profileUserId ?? userId, userId);
                 if (version === screenRequestVersion.current) setProfile(data);
             }
-            if (version === screenRequestVersion.current) setStatus("ready");
+            if (version === screenRequestVersion.current) setScreenLoad({ key: requestKey, status: "ready" });
         } catch (error) {
             if (version !== screenRequestVersion.current) return;
-            setStatus("error");
+            setScreenLoad({ key: requestKey, status: "error" });
             setErrorText(error instanceof Error ? error.message : "Request failed");
         }
     }, [loadFeed, invalidateFeed, loadProfileSummary, profileUserId]);
@@ -213,7 +237,14 @@ export default function SocialApplication() {
         if (session?.userId && navigation.screen.known) void loadScreenData(view, session.userId, feedTab, true);
         return () => { screenRequestVersion.current += 1; };
     }, [view, feedTab, session?.userId, loadScreenData, navigation.screen.known]);
-    useLayoutEffect(() => { if (status === "ready") restoreScroll(); }, [status, restoreScroll]);
+    useLayoutEffect(() => {
+        if (view !== "home") pendingFeedScroll.current = null;
+        if (status !== "ready") return;
+        if (view === "home" && pendingFeedScroll.current === feedTab) {
+            window.scrollTo({ top: feedScrollPositions.current[feedTab], behavior: "auto" });
+            pendingFeedScroll.current = null;
+        } else restoreScroll();
+    }, [status, view, feedTab, restoreScroll]);
     useFeedMediaSuspension({
         postDetailOpen: Boolean(selectedPost),
         storyCreatorOpen,
@@ -286,9 +317,10 @@ export default function SocialApplication() {
     function switchFeedTab(nextTab: "DISCOVER" | "FRIENDS") {
         if (nextTab === feedTab)
             return;
-        feedScrollPositions.current[feedTab] = window.scrollY;
+        if (status === "ready") feedScrollPositions.current[feedTab] = window.scrollY;
+        pendingFeedScroll.current = nextTab;
         setFeedTab(nextTab);
-        window.setTimeout(() => window.scrollTo({ top: feedScrollPositions.current[nextTab] ?? 0, behavior: "auto" }), 80);
+        window.scrollTo({ top: 0, behavior: "auto" });
     }
     async function openProfile(userId: string, navigate = true) {
         if (!session)
@@ -322,6 +354,11 @@ export default function SocialApplication() {
         navigation.go(target === "profile" && session ? routes.profile(session.userId) : target === "home" ? routes.home : `/${target}`);
     }
     function handleBackNavigation() {
+        if (view === "settings" && navigation.screen.settingsSection) {
+            if (navigation.screenLocation.state?.settingsCategoryOrigin) navigation.navigate(-1);
+            else navigation.go(routes.settings, { replace: true });
+            return;
+        }
         if (selectedPost) {
             closePostDetail();
             return;
@@ -331,7 +368,8 @@ export default function SocialApplication() {
             return;
         }
         if (connectionsOpen) {
-            setConnectionsOpen(false);
+            if (navigation.location.state?.localSheet?.id === "connections") navigation.navigate(-1);
+            else setConnectionsOpen(false);
             return;
         }
         navigation.back();
@@ -348,9 +386,10 @@ export default function SocialApplication() {
         setProfile((current) => applyConnectionRemoval(current, tab, row));
     }
     function findPost(postId: string) {
-        return selectedPost?.id === postId ? selectedPost : posts.find((post) => post.id === postId) ?? profile?.posts.find((post) => post.id === postId) ?? profile?.reposts.find((post) => post.id === postId);
+        return selectedPost?.id === postId ? selectedPost : profileCollection.getPost(postId) ?? posts.find((post) => post.id === postId) ?? profile?.posts.find((post) => post.id === postId) ?? profile?.reposts.find((post) => post.id === postId);
     }
     function updatePostSurfaces(postId: string, update: (post: Post) => Post) {
+        profileCollection.updatePost(postId, update);
         setPosts((items) => items.map((post) => post.id === postId ? update(post) : post));
         setProfile((value) => value ? {
             ...value,
@@ -377,7 +416,9 @@ export default function SocialApplication() {
             thumbnailUrl: post.media[0]?.url ?? null,
             captionPreview: post.caption.slice(0, 180),
         });
+        postApi.invalidateSurfaceDetail(post.id);
         setPosts((items) => items.filter((item) => item.id !== post.id));
+        profileCollection.removePost(post.id);
         setProfile((value) => value ? {
             ...value,
             posts: value.posts.filter((item) => item.id !== post.id),
@@ -440,15 +481,17 @@ export default function SocialApplication() {
     if (!session)
         return <LoginScreen errorText={errorText || authError} errorIsRecoverable={!errorText && authErrorIsRecoverable} loading={false} onLogin={handleLogin}/>;
     const showBackButton = navigation.hasBack;
-    const shellClassName = view === "home" ? "home-shell" : view === "chat" ? "chat-shell" : "centered-shell";
-    const showMobileChrome = view !== "create";
+    const shellClassName = `${view === "home" ? "home-shell" : view === "chat" ? "chat-shell" : "centered-shell"}${mobileConversation ? " mobile-chat-conversation" : ""}${view === "create" ? " no-mobile-navigation" : ""}`;
+    const showMobileChrome = view !== "create" && !mobileConversation;
+    const mobileTitle = navigation.screen.profileFeedPostId ? "Bài viết" : view === "settings" && navigation.screen.settingsSection ? SETTINGS_TITLES[navigation.screen.settingsSection] : MOBILE_VIEW_TITLES[view];
     const coveringOverlayOpen = storyCreatorOpen || Boolean(navigation.route.story) || Boolean(editingPost) || connectionsOpen || createMenuOpen;
     return (<PostInteractionProvider viewerId={session.userId} feedBlocked={Boolean(navigation.route.postId) || coveringOverlayOpen} detailBlocked={coveringOverlayOpen}>
       <ScreenLocationProvider location={navigation.screenLocation}><ResponsiveAppShell
         className={shellClassName}
         viewportMode={viewportMode}
+        style={conversationViewportStyle}
         desktopNavigation={<Navigation active={view} chatUnreadCount={chatUnreadCount} notificationUnreadCount={notificationUnreadCount} onNavigate={navigateToView} onReloadHome={reloadHomeFromSidebar} onLogout={handleLogout}/>}
-        mobileHeader={showMobileChrome ? <MobileAppHeader title={MOBILE_VIEW_TITLES[view]} canGoBack={showBackButton && view !== "chat"} onBack={handleBackNavigation} onNavigate={navigateToView}/> : null}
+        mobileHeader={showMobileChrome ? <MobileAppHeader title={mobileTitle} subtitle={navigation.screen.profileFeedPostId ? profile?.username : undefined} canGoBack={showBackButton && view !== "chat"} onBack={handleBackNavigation} onNavigate={navigateToView}/> : null}
         mobileNavigation={showMobileChrome ? <MobileNav active={view} chatUnreadCount={chatUnreadCount} notificationUnreadCount={notificationUnreadCount} onNavigate={navigateToView}/> : null}
         rightRail={view === "home" ? <aside className="right-rail"><SuggestedFriendsPanel viewerId={session.userId} onOpenProfile={openProfile} onOpenChat={openChatForUser}/></aside> : null}
       >
@@ -474,11 +517,18 @@ export default function SocialApplication() {
                     navigation.go(routes.createPost);
             }}/></Suspense>}
         {view === "chat" && <ChatScreen userId={session.userId} username={session.username} onOpenProfile={openProfile} onOpenStory={openStoryFromReply} initialTarget={fullChatTarget} onSelectConversation={(id) => navigation.go(id ? routes.conversation(id) : routes.chat)}/>}
-        {view === "profile" && <ProfileScreen viewerId={session.userId} profile={profile?.id === profileUserId ? profile : null} onSelectPost={openPostDetail} onOpenStoryHighlight={openStoryHighlight} onOpenArchive={() => navigateToView("library")} onOpenConnections={openConnections} onRefresh={async () => {
+        {view === "profile" && navigation.screen.profileFeedPostId && <ProfileFeedScreen
+            viewerId={session.userId} profile={profile?.id === profileUserId ? profile : null} selectedPostId={navigation.screen.profileFeedPostId}
+            entryKey={navigation.screenLocation.key} restoring={navigation.isRestoringScroll} onReady={restoreScroll} collection={profileCollection}
+            onSelectPost={openPostDetail} onTogglePost={togglePost} onEditPost={setEditingPost} onArchivePost={handleArchivePost} onOpenProfile={openProfile}/>} 
+        {view === "profile" && !navigation.screen.profileFeedPostId && <ProfileScreen viewerId={session.userId} profile={profile?.id === profileUserId ? profile : null} loading={status === "loading" || status === "idle"}
+            activeTab={profileTabs[profileUserId ?? session.userId] ?? "POSTS"} onActiveTabChange={(tab) => setProfileTabs(current => ({ ...current, [profileUserId ?? session.userId]: tab }))}
+            onSelectPost={(post) => { if (viewportMode === "mobile" && (profileTabs[profileUserId ?? session.userId] ?? "POSTS") === "POSTS" && post.author.id === profileUserId) navigation.go(routes.profileFeed(profileUserId, post.id)); else openPostDetail(post); }}
+            onOpenStoryHighlight={openStoryHighlight} onOpenArchive={() => navigateToView("library")} onOpenConnections={openConnections} onRefresh={async () => {
                 if (profile)
                     await openProfile(profile.id, false);
             }} onMessage={openChatForUser} onOpenProfile={openProfile}/>}
-        {view === "settings" && <Suspense fallback={<FeatureLoading/>}><FeatureSettingsScreen userId={session.userId}/></Suspense>}
+        {view === "settings" && <Suspense fallback={<FeatureLoading/>}><FeatureSettingsScreen userId={session.userId} headerOwnedByShell={viewportMode === "mobile"}/></Suspense>}
         {view === "states" && <SystemStates />}
       </ResponsiveAppShell></ScreenLocationProvider>
       <CreateContentMenu open={createMenuOpen} onClose={() => setCreateMenuOpen(false)} onCreatePost={() => { setCreateMenuOpen(false); navigation.go(routes.createPost); }} reelsAvailable={false}/>
@@ -487,7 +537,7 @@ export default function SocialApplication() {
       {selectedStoryIndex !== null && activeStoryQueue[selectedStoryIndex] && <StoryViewer stories={activeStoryQueue} index={selectedStoryIndex} currentUserId={session.userId} onClose={navigation.closeResource} onSelectIndex={selectStoryIndex} onViewed={handleStoryViewed} onDelete={handleDeleteStory} onOpenProfile={openProfile}/>}
       {storyCreatorOpen && <StoryCreatorStudio userId={session.userId} initialDraft={resumeDraft?.kind === "STORY" ? resumeDraft.draft : null} onClose={() => { navigation.closeResource(); setResumeDraft(null); }} onSaveDraft={(request) => libraryApi.saveDraft(session.userId, request)} onDraftSaved={() => undefined} onPublished={() => loadScreenData("home", session.userId, feedTab)}/>}
       {navigation.route.postId && !selectedPost && <div className="modal-backdrop post-detail-backdrop" role="dialog" aria-modal="true"><section className="post-route-state" style={{ padding: 24, background: "var(--surface, white)", borderRadius: 16 }}><button onClick={closePostDetail}>Đóng</button>{postRouteError ? <div role="alert"><strong>Bài viết không còn tồn tại hoặc bạn không có quyền xem.</strong><button onClick={retryPostRoute}>Thử lại</button></div> : <div role="status">Đang tải bài viết…</div>}</section></div>}
-      {selectedPost && <PostDetail post={selectedPost} viewerId={session.userId} targetCommentId={targetCommentId} onClose={closePostDetail} onTogglePost={togglePost} onCommentCreated={incrementPostCommentCount} onEdit={() => setEditingPost(selectedPost)} onArchive={() => void handleArchivePost(selectedPost)} onOpenProfile={openProfile}/>}
+      {selectedPost && <PostDetail post={selectedPost} presentation={viewportMode === "mobile" && navigation.hasBackground ? "discussion" : "detail"} viewerId={session.userId} targetCommentId={targetCommentId} onClose={closePostDetail} onTogglePost={togglePost} onCommentCreated={incrementPostCommentCount} onEdit={() => setEditingPost(selectedPost)} onArchive={() => void handleArchivePost(selectedPost)} onOpenProfile={openProfile}/>}
       {editingPost && <PostEditDialog post={editingPost} userId={session.userId} onClose={() => setEditingPost(null)} onSaved={handlePostEdited}/>}
       {viewportMode !== "mobile" && view !== "chat" && <FloatingMessenger userId={session.userId} compactLauncher={view !== "home"} onOpenFullChat={(id) => navigation.go(id ? routes.conversation(id) : routes.chat)} onOpenStory={openStoryFromReply} openConversationRequest={miniChatRequest}/>}
     </PostInteractionProvider>);

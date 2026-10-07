@@ -193,3 +193,16 @@ describe("SearchWorkspace", () => {
   });
 });
 import { cleanup } from '@testing-library/react';
+
+it("appends paginated results, deduplicates and retries failed pages", async () => {
+  const loadUsers = vi.fn().mockResolvedValueOnce({ content: [userResult], hasMore: true })
+    .mockRejectedValueOnce(new Error("offline"))
+    .mockResolvedValueOnce({ content: [userResult, { ...userResult, id: "user-2", displayName: "Second user" }], hasMore: false });
+  render(<SearchWorkspace query="bach" debounceMs={0} onQueryChange={vi.fn()} loadUsers={loadUsers} loadPosts={vi.fn()} onSelectUser={vi.fn()} onSelectPost={vi.fn()} />);
+  fireEvent.click(await screen.findByRole("button", { name: "Load more" }));
+  expect(screen.getByRole("button", { name: "Open Dau Duc Bach profile" })).toBeTruthy();
+  fireEvent.click(await screen.findByRole("button", { name: "Retry loading more" }));
+  expect(await screen.findByRole("button", { name: "Open Second user profile" })).toBeTruthy();
+  expect(screen.getAllByRole("button", { name: "Open Dau Duc Bach profile" })).toHaveLength(1);
+  expect(loadUsers.mock.calls.map(([args]) => args.page ?? 0)).toEqual([0, 1, 1]);
+});

@@ -27,11 +27,14 @@ export type HomeScreenProps = {
 };
 
 export function HomeScreen(props: HomeScreenProps) {
-  const [touchStart, setTouchStart] = useState<number | null>(null);
+  const [touchStart, setTouchStart] = useState<{ x: number; y: number } | null>(null);
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
+  const readyTabRef = useRef<string | null>(null);
   const hasPosts = props.posts.length > 0;
-  const initialLoading = props.status === "loading" && !hasPosts;
-  const showFeedContent = props.status !== "error" && (props.status !== "loading" || hasPosts);
+  const initialLoading = props.status === "loading" || props.status === "idle";
+  const retainingFeed = readyTabRef.current === props.tab && hasPosts;
+  const showFeedContent = props.status === "ready" || retainingFeed;
+  useEffect(() => { if (props.status === 'ready') readyTabRef.current = props.tab; }, [props.status, props.tab]);
 
   useEffect(() => {
     const node = loadMoreRef.current;
@@ -43,18 +46,20 @@ export function HomeScreen(props: HomeScreenProps) {
     return () => observer.disconnect();
   }, [props.hasMore, props.loadingMore, props.status, props.posts.length, props.onLoadMore]);
 
-  function handleTouchEnd(value: number) {
+  function handleTouchEnd(x: number, y: number) {
     if (touchStart === null) return;
-    const delta = touchStart - value;
-    if (Math.abs(delta) > 56) props.setTab(delta > 0 ? "FRIENDS" : "DISCOVER");
+    const delta = touchStart.x - x;
+    if (Math.abs(delta) > 56 && Math.abs(delta) > Math.abs(touchStart.y - y) * 1.4) props.setTab(delta > 0 ? "FRIENDS" : "DISCOVER");
     setTouchStart(null);
   }
 
   return (
     <section
-      className={`screen feed-screen ${props.status === "loading" && hasPosts ? "is-refreshing" : ""}`}
-      onTouchStart={(event) => setTouchStart(shouldStartFeedTabSwipe(event.target) ? event.touches[0]?.clientX ?? null : null)}
-      onTouchEnd={(event) => handleTouchEnd(event.changedTouches[0]?.clientX ?? 0)}
+      className="screen feed-screen"
+      aria-busy={initialLoading}
+      onTouchStart={(event) => { const touch = event.touches[0]; setTouchStart(shouldStartFeedTabSwipe(event.target) && touch && event.touches.length === 1 ? { x: touch.clientX, y: touch.clientY } : null); }}
+      onTouchCancel={() => setTouchStart(null)}
+      onTouchEnd={(event) => handleTouchEnd(event.changedTouches[0]?.clientX ?? 0, event.changedTouches[0]?.clientY ?? 0)}
     >
       <div className="home-stories">
         <StoryRail userId={props.userId} items={props.stories} onCreate={props.onCreateStory} onSelect={props.onSelectStory} />
@@ -65,7 +70,7 @@ export function HomeScreen(props: HomeScreenProps) {
           <button className={props.tab === "FRIENDS" ? "active" : ""} onClick={() => props.setTab("FRIENDS")} role="tab" aria-selected={props.tab === "FRIENDS"}>Friends</button>
         </div>
       </div>
-      {initialLoading && <SkeletonFeed />}
+      {initialLoading && !retainingFeed && <SkeletonFeed />}
       {props.status === "error" && <FeedState icon={WifiOff} title="No internet" detail="Feed could not be loaded from the backend." />}
       {showFeedContent && !hasPosts && (
         <FeedState
@@ -106,5 +111,7 @@ function FeedState({ icon: Icon, title, detail }: { icon: LucideIcon; title: str
 }
 
 function SkeletonFeed() {
-  return <div className="skeleton-stack" aria-label="Loading feed"><span /><span /><span /></div>;
+  return <div className="skeleton-stack" role="status" aria-label="Loading feed">
+    <span aria-hidden="true" /><span aria-hidden="true" /><span aria-hidden="true" />
+  </div>;
 }

@@ -44,8 +44,8 @@ export const storyApi = {
       body,
     );
   },
-  viewers(storyId: string, ownerId: string, page = 0, size = 20) {
-    return apiGet<Page<StoryViewerDto>>(`/profile-media/stories/${encodeURIComponent(storyId)}/viewers?ownerId=${encodeURIComponent(ownerId)}&page=${page}&size=${size}`);
+  viewers(storyId: string, ownerId: string, page = 0, size = 20, query = "") {
+    return apiGet<Page<StoryViewerDto>>(`/profile-media/stories/${encodeURIComponent(storyId)}/viewers?ownerId=${encodeURIComponent(ownerId)}&page=${page}&size=${size}${query ? `&query=${encodeURIComponent(query)}` : ""}`);
   },
   deleteStory(storyId: string) {
     return apiSend<void>(`/profile-media/stories/${encodeURIComponent(storyId)}`, "DELETE");

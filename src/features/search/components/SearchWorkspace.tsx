@@ -10,13 +10,16 @@ export type { PostSearchMedia, PostSearchResult, SearchRelationship, UserSearchR
 export interface SearchLoadArgs {
   query: string;
   signal: AbortSignal;
+  page?: number;
 }
+
+export type SearchPage<T> = T[] | { content: T[]; hasMore: boolean };
 
 export interface SearchWorkspaceProps {
   query: string;
   onQueryChange: (query: string) => void;
-  loadUsers: (args: SearchLoadArgs) => Promise<UserSearchResult[]>;
-  loadPosts: (args: SearchLoadArgs) => Promise<PostSearchResult[]>;
+  loadUsers: (args: SearchLoadArgs) => Promise<SearchPage<UserSearchResult>>;
+  loadPosts: (args: SearchLoadArgs) => Promise<SearchPage<PostSearchResult>>;
   onSelectUser: (user: UserSearchResult) => void;
   onSelectPost: (post: PostSearchResult) => void;
   initialTab?: SearchTab;
@@ -52,30 +55,42 @@ export function SearchWorkspace({
   const [posts, setPosts] = useState<PostSearchResult[]>([]);
   const [retryVersion, setRetryVersion] = useState(0);
   const requestVersion = useRef(0);
+  const pageRef = useRef(0);
+  const moreRequest = useRef<AbortController | null>(null);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [moreError, setMoreError] = useState(false);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
 
   const executeSearch = useCallback(
-    async (activeTab: SearchTab, activeQuery: string, signal: AbortSignal, version: number) => {
+    async (activeTab: SearchTab, activeQuery: string, signal: AbortSignal, version: number, page = 0) => {
       try {
         if (activeTab === "users") {
-          const nextUsers = await loadUsers({ query: activeQuery, signal });
+          const nextUsers = await loadUsers({ query: activeQuery, signal, ...(page ? { page } : {}) });
           if (signal.aborted || version !== requestVersion.current) return;
-          setUsers(nextUsers);
+          const content = Array.isArray(nextUsers) ? nextUsers : nextUsers.content;
+          setUsers(current => Array.from(new Map([...(page ? current : []), ...content].map(item => [item.id, item])).values()));
+          setHasMore(!Array.isArray(nextUsers) && nextUsers.hasMore);
         } else {
-          const nextPosts = await loadPosts({ query: activeQuery, signal });
+          const nextPosts = await loadPosts({ query: activeQuery, signal, ...(page ? { page } : {}) });
           if (signal.aborted || version !== requestVersion.current) return;
-          setPosts(nextPosts);
+          const content = Array.isArray(nextPosts) ? nextPosts : nextPosts.content;
+          setPosts(current => Array.from(new Map([...(page ? current : []), ...content].map(item => [item.id, item])).values()));
+          setHasMore(!Array.isArray(nextPosts) && nextPosts.hasMore);
         }
+        pageRef.current = page;
         setStatus("success");
       } catch (error) {
         if (signal.aborted || version !== requestVersion.current) return;
-        setStatus("error");
+        if (page) setMoreError(true); else setStatus("error");
       }
     },
     [loadPosts, loadUsers],
   );
 
   useEffect(() => {
+    moreRequest.current?.abort(); moreRequest.current = null;
+    setHasMore(false); setLoadingMore(false); setMoreError(false); pageRef.current = 0;
     const normalizedQuery = query.trim();
     const controller = new AbortController();
     const version = ++requestVersion.current;
@@ -95,8 +110,20 @@ export function SearchWorkspace({
     return () => {
       window.clearTimeout(timer);
       controller.abort();
+      moreRequest.current?.abort();
     };
   }, [debounceMs, executeSearch, query, retryVersion, tab]);
+
+  async function loadMore() {
+    if (moreRequest.current) return;
+    const controller = new AbortController();
+    moreRequest.current = controller;
+    setLoadingMore(true); setMoreError(false);
+    await executeSearch(tab, query.trim(), controller.signal, requestVersion.current, pageRef.current + 1);
+    if (moreRequest.current === controller) {
+      moreRequest.current = null; setLoadingMore(false);
+    }
+  }
 
   const activeResults = tab === "users" ? users : posts;
 
@@ -238,6 +265,10 @@ export function SearchWorkspace({
             ))}
           </div>
         )}
+        {status === "success" && hasMore && <div className={styles.pagination}>
+          {moreError && <p role="alert">Could not load more results.</p>}
+          <button type="button" disabled={loadingMore} onClick={() => void loadMore()}>{loadingMore ? "Loading more?" : moreError ? "Retry loading more" : "Load more"}</button>
+        </div>}
       </div>
     </section>
   );

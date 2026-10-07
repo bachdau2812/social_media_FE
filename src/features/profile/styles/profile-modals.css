@@ -265,3 +265,23 @@
     flex-basis: 40px;
   }
 }
+.connections-load-more { min-height: 44px; flex-shrink: 0; margin: 8px 16px 16px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); }
+@media (max-width: 767px) {
+  .profile-connections-sheet .mobile-sheet-content { padding: 0; display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+  .profile-connections-sheet .connections-modal-backdrop { position: static; background: transparent; display: flex; flex: 1; min-height: 0; }
+  .profile-connections-sheet .connections-modal { height: auto; flex: 1; min-height: 0; max-height: none; border: 0; border-radius: 0; }
+  .profile-connections-sheet .connections-modal-header { display: none; }
+  .profile-connections-sheet .connections-tools input, .profile-connections-sheet .connections-tools select { font-size: 16px; min-height: 44px; }
+  .profile-connections-sheet .connections-tabs button, .profile-connections-sheet .relationship-action { min-height: 44px; }
+  .profile-connections-sheet .connections-tabs button { font-size: 0.86rem; }
+  .profile-connections-sheet .connection-identity strong { font-size: 0.9rem; }
+  .profile-connections-sheet .connection-identity small { font-size: 0.76rem; }
+  .profile-info-backdrop { top: var(--surface-viewport-top, 0px); bottom: auto; height: var(--surface-viewport-height, 100dvh); padding: 0; }
+  .profile-info-backdrop .profile-about-panel, .profile-info-backdrop .profile-editor-panel { height: 100%; max-height: 100%; }
+  .profile-info-backdrop .profile-about-panel > header, .profile-info-backdrop .profile-editor-panel > header { padding-top: env(safe-area-inset-top, 0px); min-height: calc(56px + env(safe-area-inset-top, 0px)); }
+  .profile-about-body, .profile-editor-body { padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px)); }
+  .profile-editor-panel button, .profile-entry-form button { min-height: 44px; min-width: 44px; }
+  .profile-editor-body input:not([type="checkbox"]), .profile-entry-form input:not([type="checkbox"]) { font-size: 16px; min-height: 44px; min-width: 0; }
+  .profile-entry-form { max-height: calc(100% - env(safe-area-inset-top, 0px)); scroll-padding-bottom: 24px; }
+  .profile-editor-row { grid-template-columns: 20px minmax(0, 1fr) 44px 44px; }
+}

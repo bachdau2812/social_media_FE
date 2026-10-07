@@ -1,5 +1,5 @@
 import { apiGet, apiSend } from "../../../shared/api";
-import type { ProfileDto } from "../model/profile.dto";
+import type { ProfileDto, ProfilePostPageDto } from "../model/profile.dto";
 
 export type ConnectionTab = "FOLLOWERS" | "FOLLOWING" | "FRIENDS";
 export type ConnectionUserDto = { id: string; userId: string; username: string; displayName: string; avatarUrl?: string | null; mutualContext?: string | null; relationshipAction: string; viewerFollowsUser: boolean; userFollowsViewer: boolean; friend: boolean; followedAt?: string | null };
@@ -16,17 +16,24 @@ export interface ProfileConnectionsQuery {
   sort: "RECENT" | "NAME";
   page?: number;
   size?: number;
+  signal?: AbortSignal;
 }
 
 export const profileApi = {
+  getPosts(userId: string, viewerId: string, page = 0, size = 18, signal?: AbortSignal, selectedPostId?: string) {
+    const query = new URLSearchParams({ viewerId, page: String(page), size: String(size) });
+    if (selectedPostId) query.set("selectedPostId", selectedPostId);
+    return apiGet<ProfilePostPageDto>(`/profiles/${encodeURIComponent(userId)}/posts?${query}`, { signal });
+  },
   uploadAvatar(userId: string, avatarUrl: string) {
     return apiSend<{ userId: string; status: "PENDING_SCAN" }>("/profile-media/avatar", "POST", { userId, avatarUrl });
   },
   getSummary(userId: string, viewerId: string, postLimit = 18, signal?: AbortSignal) {
     return apiGet<ProfileDto>(`/profiles/${encodeURIComponent(userId)}/summary?viewerId=${encodeURIComponent(viewerId)}&postLimit=${postLimit}`, { signal });
   },
-  getConnections({ profileId, viewerId, tab, query, sort, page = 0, size = 40 }: ProfileConnectionsQuery) {
-    return apiGet<ConnectionsDto>(`/profiles/${encodeURIComponent(profileId)}/connections?viewerId=${encodeURIComponent(viewerId)}&tab=${tab}&query=${encodeURIComponent(query)}&sort=${sort}&page=${page}&size=${size}`);
+  getConnections({ profileId, viewerId, tab, query, sort, page = 0, size = 40, signal }: ProfileConnectionsQuery) {
+    const path = `/profiles/${encodeURIComponent(profileId)}/connections?viewerId=${encodeURIComponent(viewerId)}&tab=${tab}&query=${encodeURIComponent(query)}&sort=${sort}&page=${page}&size=${size}`;
+    return signal ? apiGet<ConnectionsDto>(path, { signal }) : apiGet<ConnectionsDto>(path);
   },
   getSimilarUsers(profileId: string, viewerId: string, signal: AbortSignal) {
     return apiGet<Page<UserDiscoveryDto>>(`/search/users/${encodeURIComponent(profileId)}/similar?viewerId=${encodeURIComponent(viewerId)}&page=0&size=20`, { signal });

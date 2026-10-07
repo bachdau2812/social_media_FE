@@ -1,4 +1,4 @@
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ChatComposer } from "./ChatComposer";
 
@@ -62,4 +62,27 @@ describe("ChatComposer layout parity", () => {
 
     expect(screen.getByRole("alert")).toHaveTextContent(fixture.sendError);
   });
+});
+
+ it.each([false, true])("keeps mobile Enter as a newline on both surfaces (%s)", (compact) => {
+  vi.stubGlobal("matchMedia", vi.fn(() => ({ matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() })));
+  const fixture = controller(); fixture.draft = "hello";
+  render(<ChatComposer controller={fixture as never} compact={compact} />);
+  fireEvent.keyDown(screen.getByRole("textbox"), { key: "Enter" });
+  expect(fixture.send).not.toHaveBeenCalled();
+  vi.unstubAllGlobals();
+});
+
+it.each([false, true])("sends desktop Enter while leaving Shift and IME composition alone (%s)", (compact) => {
+ vi.stubGlobal("matchMedia", vi.fn(() => ({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() })));
+ const fixture = controller(); fixture.draft = "hello";
+ render(<ChatComposer controller={fixture as never} compact={compact} />);
+ const input = screen.getByRole("textbox");
+ fireEvent.keyDown(input, { key: "Enter", shiftKey: true });
+ fireEvent.keyDown(input, { key: "Enter", isComposing: true });
+ fireEvent.keyDown(input, { key: "Enter", keyCode: 229 });
+ expect(fixture.send).not.toHaveBeenCalled();
+ fireEvent.keyDown(input, { key: "Enter" });
+ expect(fixture.send).toHaveBeenCalledOnce();
+ vi.unstubAllGlobals();
 });

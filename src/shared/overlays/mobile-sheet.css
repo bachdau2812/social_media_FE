@@ -1,0 +1,25 @@
+.mobile-sheet-backdrop { position: fixed; inset: 0; top: var(--surface-viewport-top, 0px); height: var(--surface-viewport-height, 100dvh); z-index: 1450; background: rgb(0 0 0 / .42); display: flex; align-items: flex-end; }
+.mobile-sheet { width: 100%; max-height: 90%; display: flex; flex-direction: column; min-height: 0; color: var(--text-primary); background: var(--surface, var(--panel, #fff)); border-radius: 22px 22px 0 0; padding-bottom: env(safe-area-inset-bottom); overflow: hidden; animation: sheet-enter 180ms ease-out; }
+.mobile-sheet-header { position: relative; flex: none; display: flex; align-items: center; justify-content: space-between; min-height: 64px; padding: 12px 16px 0; touch-action: none; }
+.mobile-sheet-header h2 { margin: 0; font-size: 17px; }
+.mobile-sheet-header button { width: 44px; height: 44px; border: 0; background: transparent; color: inherit; display: grid; place-items: center; }
+.mobile-sheet-handle { position: absolute; top: 7px; left: calc(50% - 18px); width: 36px; height: 4px; border-radius: 4px; background: currentColor; opacity: .24; }
+.mobile-sheet-content { display: flex; flex-direction: column; min-height: 0; overflow: auto; overscroll-behavior: contain; }
+@keyframes sheet-enter { from { transform: translateY(30px); opacity: .5; } to { transform: translateY(0); opacity: 1; } }
+@media (orientation: landscape) and (max-height: 550px) { .mobile-sheet { max-height: 100%; } }
+@media (prefers-reduced-motion: reduce) { .mobile-sheet { animation: none; } }
+.post-discussion-sheet { height: 90%; background: var(--app-surface); color: var(--app-text); }
+.post-discussion-sheet > .mobile-sheet-content { flex: 1; overflow: hidden; }
+.post-discussion-sheet .post-detail-backdrop { position: static; padding: 0; background: transparent; display: flex; min-height: 0; flex: 1; }
+.post-discussion-sheet .post-detail { width: 100%; height: 100%; max-height: none; min-height: 0; display: flex; border-radius: 0; }
+.post-discussion-sheet .detail-panel { width: 100%; min-height: 0; flex: 1; }
+.post-discussion-sheet .detail-close, .post-discussion-sheet .detail-author, .post-discussion-sheet .detail-engagement-footer { display: none; }
+.post-discussion-sheet .detail-sidebar-body { flex: 1; min-height: 0; overscroll-behavior: contain; }
+.mobile-sheet { background: var(--app-surface); color: var(--app-text); }
+.engagement-sheet .engagement-modal-backdrop, .story-viewers-sheet .story-viewers-backdrop { position: static; background: transparent; padding: 0; display: flex; min-height: 0; }
+.engagement-sheet .engagement-modal { width: 100%; max-height: none; border-radius: 0; box-shadow: none; }
+.story-viewers-sheet { height: 80%; }
+.story-viewers-sheet .mobile-sheet-content, .story-viewers-sheet .story-viewers-backdrop { flex: 1; overflow: hidden; }
+.story-viewers-sheet .story-viewers-panel { height: 100%; min-height: 0; border-radius: 0; box-shadow: none; padding-bottom: 0; background: var(--app-surface); color: var(--app-text); animation: none; }
+.mobile-sheet .engagement-person, .mobile-sheet .story-viewer-follow, .mobile-sheet .story-viewers-more, .mobile-sheet .story-viewers-retry { min-height: 44px; }
+.mobile-sheet textarea, .mobile-sheet input { font-size: 16px; }

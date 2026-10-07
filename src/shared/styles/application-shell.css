@@ -104,7 +104,7 @@
     padding:
       0
       max(12px, var(--app-safe-right))
-      calc(var(--app-mobile-nav-height) + var(--app-safe-bottom) + 12px)
+      var(--app-mobile-nav-footprint)
       max(12px, var(--app-safe-left));
   }
 
@@ -132,13 +132,17 @@
     background: color-mix(in srgb, var(--app-surface) 94%, transparent);
     backdrop-filter: blur(14px);
   }
-  .mobile-app-header > strong {
+  .mobile-header-title {
     min-width: 0;
     overflow: hidden;
     text-align: center;
     text-overflow: ellipsis;
     white-space: nowrap;
+    display: grid;
+    gap: 1px;
   }
+  .mobile-header-title small { overflow: hidden; text-overflow: ellipsis; font-size: 11px; font-weight: 400; color: var(--app-text-muted); }
+  .mobile-header-title strong { overflow: hidden; text-overflow: ellipsis; font-size: 16px; }
   .mobile-header-action {
     width: var(--app-touch-target);
     height: var(--app-touch-target);
@@ -152,13 +156,22 @@
   }
 
   .mobile-nav {
-    right: 0;
-    bottom: 0;
-    left: 0;
-    height: auto;
-    min-height: calc(var(--app-mobile-nav-height) + var(--app-safe-bottom));
-    padding: 0 var(--app-safe-right) var(--app-safe-bottom) var(--app-safe-left);
+    position: fixed;
+    z-index: var(--app-z-navigation);
+    right: max(var(--app-mobile-nav-inset), var(--app-safe-right));
+    bottom: calc(var(--app-safe-bottom) + var(--app-mobile-nav-gap));
+    left: max(var(--app-mobile-nav-inset), var(--app-safe-left));
+    width: auto;
+    max-width: 520px;
+    margin-inline: auto;
+    height: var(--app-mobile-nav-height);
+    min-height: var(--app-mobile-nav-height);
+    padding: 6px;
     grid-template-columns: repeat(5, minmax(var(--app-touch-target), 1fr));
+    border: 1px solid var(--app-border);
+    border-radius: 20px;
+    box-shadow: 0 6px 24px rgb(0 0 0 / .12);
+    background: var(--app-surface);
     background: color-mix(in srgb, var(--app-surface) 96%, transparent);
     backdrop-filter: blur(16px);
   }
@@ -167,6 +180,38 @@
     min-height: var(--app-touch-target);
     display: grid;
     place-items: center;
+    border-radius: 14px;
+    color: var(--app-text-muted);
+  }
+  .mobile-nav button.active { color: var(--app-text); background: var(--app-surface-subtle); }
+  .mobile-nav button:active { background: var(--app-surface-subtle); }
+  .app-shell.no-mobile-navigation { padding-bottom: 0; }
+
+  /* The shell owns viewport and navigation space; chat owns only its inner rows. */
+  .app-shell.chat-shell[data-viewport-mode="mobile"] {
+    height: 100dvh;
+    min-height: 0;
+    padding: 0 0 var(--app-mobile-nav-footprint);
+    overflow: hidden;
+  }
+  .app-shell.chat-shell[data-viewport-mode="mobile"] > .app-main {
+    height: calc(100dvh - var(--app-mobile-header-height) - var(--app-safe-top) - var(--app-mobile-nav-footprint));
+    min-height: 0;
+    padding: 0;
+    overflow: hidden;
+  }
+  .app-shell.chat-shell.mobile-chat-conversation[data-viewport-mode="mobile"] {
+    position: fixed;
+    top: var(--surface-viewport-top, 0px);
+    right: 0;
+    left: 0;
+    height: var(--surface-viewport-height, 100dvh);
+    padding: 0;
+  }
+  .app-shell.chat-shell.mobile-chat-conversation[data-viewport-mode="mobile"] > .app-main { height: 100%; }
+  .mobile-chat-conversation .dm-conversation-header {
+    min-height: calc(64px + var(--app-safe-top));
+    padding-top: var(--app-safe-top);
   }
 }
 

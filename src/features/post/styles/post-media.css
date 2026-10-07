@@ -4133,3 +4133,7 @@ span.detail-media-thumbnail {
   cursor: wait;
   background: #f1f1ee;
 }
+@media (max-width: 767px) {
+  .action-bar button { min-width: 44px; min-height: 44px; }
+  .detail-composer { padding-bottom: max(12px, env(safe-area-inset-bottom)); }
+}

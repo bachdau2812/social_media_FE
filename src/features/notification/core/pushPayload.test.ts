@@ -2,6 +2,25 @@ import { describe, expect, it } from "vitest";
 import { normalizeForegroundPushPayload } from "./pushPayload";
 
 describe("normalizeForegroundPushPayload", () => {
+  it.each(["data", "notification"] as const)("preserves group title and message body from %s fields", (source) => {
+    const title = "Nhóm dự án";
+    const body = 'An đã gửi một tin nhắn: "Xin chào"';
+    const payload = { title, body };
+    const notification = normalizeForegroundPushPayload({
+      ...(source === "notification" ? { notification: payload } : {}),
+      data: {
+        ...(source === "data" ? payload : {}),
+        url: "/messages?conversationId=group-1&messageId=message-1&messageSeq=7",
+      },
+    });
+
+    expect(notification.title).toBe(title);
+    expect(notification.body).toBe(body);
+    expect(notification.destination).toEqual({
+      kind: "conversation", conversationId: "group-1", messageId: "message-1", messageSeq: 7,
+    });
+  });
+
   it("normalizes a canonical data-only payload", () => {
     const notification = normalizeForegroundPushPayload({
       data: {

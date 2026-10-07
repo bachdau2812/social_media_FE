@@ -2,9 +2,11 @@
    original StoryCreatorStudio.css. */
 .story-mobile-tools-trigger,
 .story-mobile-tools-header { display: none; }
+.story-studio-tools[hidden] { display: none; }
 
-@media (max-width: 760px) {
+@media (max-width: 767px) {
   .story-studio-backdrop { padding: 0; }
+  .story-studio-backdrop { top: var(--surface-viewport-top, 0px); height: var(--surface-viewport-height, 100dvh); }
   .story-studio {
     width: 100vw;
     height: 100vh;
@@ -14,6 +16,8 @@
     border: 0;
     border-radius: 0;
   }
+  .story-studio { height: 100%; }
+  .story-studio input, .story-studio textarea, .story-studio select { font-size: 16px; }
   .story-studio-header { padding-top: env(safe-area-inset-top); }
   .story-studio-header > div:nth-child(2) span { display: none; }
   .story-studio-steps button { min-height: 44px; padding: 0 9px; font-size: 0.76rem; }

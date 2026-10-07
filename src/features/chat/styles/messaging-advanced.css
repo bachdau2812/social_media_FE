@@ -3056,3 +3056,19 @@
     animation-duration: 1ms;
   }
 }
+
+/* Resize anchoring is owned by ChatMessageList on both messaging surfaces. */
+.dm-message-history, .floating-message-stream { overflow-anchor: none; }
+.chat-history-content { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.chat-new-messages { position: sticky; top: 8px; align-self: center; flex-shrink: 0; min-height: 44px; padding: 8px 16px; border: 1px solid var(--app-border); border-radius: 24px; background: var(--app-surface); color: var(--app-text); z-index: 2; }
+@media (max-width: 767px) {
+  .direct-messaging-page { height: 100%; min-height: 0; }
+  .dm-conversation-thread { display: flex; flex-direction: column; height: 100%; }
+  .dm-conversation-header, .dm-composer, .chat-pins-bar { flex-shrink: 0; }
+  .dm-message-history { flex: 1; min-height: 0; }
+  .chat-composer-actions.full, .chat-composer-actions.compact { grid-template-columns: 44px minmax(0, 1fr) 44px 44px 44px; gap: 0; padding: 0; }
+  .chat-composer-actions > button, .chat-composer-actions .emoji-picker-trigger { width: 44px; min-width: 44px; height: 44px; }
+  .chat-composer-actions > .chat-attachment-shortcut { display: none; }
+  .chat-composer-actions > textarea { min-height: 44px; font-size: 16px; padding: 10px 4px; }
+  .dm-mobile-back, .dm-header-actions button, .chat-media-viewer header button { min-width: 44px; min-height: 44px; }
+}

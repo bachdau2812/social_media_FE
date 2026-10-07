@@ -699,7 +699,7 @@
 
 @media (max-width: 767px) {
   .direct-messaging-page {
-    height: calc(100dvh - 72px);
+    height: 100%;
   }
 
   .dm-sidebar {
@@ -1196,4 +1196,38 @@
 @media (prefers-reduced-motion: reduce) {
   .dm-conversation-panel { transition: none; }
   .conversation-details-drawer { animation: none; }
+}
+
+/* Mobile inbox places search beside the existing compose action. */
+@media (max-width: 767px) {
+  .direct-messaging-page.pane-inbox .dm-sidebar {
+    position: relative;
+    grid-template-rows: 64px minmax(0, 1fr);
+  }
+  .direct-messaging-page.pane-inbox .dm-account-switch,
+  .direct-messaging-page.pane-inbox .dm-section-title {
+    display: none;
+  }
+  .direct-messaging-page.pane-inbox .dm-sidebar-header { justify-content: flex-end; }
+  .direct-messaging-page.pane-inbox .dm-sidebar-header .dm-compose-action {
+    flex: 0 0 44px;
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+    min-height: 44px;
+  }
+  .direct-messaging-page.pane-inbox .dm-inbox-controls {
+    position: absolute;
+    z-index: 1;
+    top: 10px;
+    left: 12px;
+    right: 64px;
+    grid-row: 1;
+    padding: 0;
+  }
+  .direct-messaging-page.pane-inbox .dm-search { min-height: 44px; }
+  .direct-messaging-page.pane-inbox .dm-thread-list {
+    grid-row: 2;
+    min-height: 0;
+  }
 }

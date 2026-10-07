@@ -21,3 +21,11 @@
 .post-menu-popover { position: absolute; top: calc(100% + 6px); right: 0; z-index: 30; display: grid; min-width: 150px; padding: 5px; border: 1px solid var(--app-border); border-radius: 7px; background: var(--app-surface); box-shadow: 0 10px 30px rgb(0 0 0 / 12%); }
 .post-menu-popover button { display: flex; align-items: center; gap: 8px; justify-content: flex-start; min-height: 40px; padding: 8px 10px; border-radius: 5px; }
 .post-menu-popover button:hover { background: var(--app-surface-subtle); }
+@media (max-width: 767px) {
+  .post-edit-backdrop { padding: 0; align-items: end; }
+  .post-edit-dialog { width: 100%; max-height: 100dvh; border-radius: 16px 16px 0 0; }
+  .post-edit-dialog > header { padding-top: max(14px, env(safe-area-inset-top)); }
+  .post-edit-dialog > footer { padding-bottom: max(14px, env(safe-area-inset-bottom)); }
+  .post-edit-dialog button { min-width: 44px; min-height: 44px; }
+  .post-edit-body textarea, .post-edit-body input, .post-edit-body select { font-size: 16px; }
+}

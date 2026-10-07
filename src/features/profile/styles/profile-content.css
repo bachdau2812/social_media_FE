@@ -83,6 +83,12 @@
   color: #111;
   background: #fff;
 }
+.profile-loading {
+  width: 100%;
+  min-height: min(60dvh, 480px);
+  padding: 32px 16px;
+  box-sizing: border-box;
+}
 .story-music-name {
   display: inline-flex;
   align-items: center;

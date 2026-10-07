@@ -67,6 +67,7 @@
   background: transparent;
   color: var(--app-text);
   font: inherit;
+  font-size: 16px;
 }
 
 .clearSearch {
@@ -103,7 +104,7 @@
 }
 
 .quietState button {
-  min-height: 40px;
+  min-height: 44px;
   padding: 0 16px;
   border: 1px solid #d6d8da;
   border-radius: 7px;
@@ -306,7 +307,7 @@
   }
 }
 
-@media (min-width: 641px) {
+@media (min-width: 768px) {
   .workspace { width: min(100%, 720px); }
   .searchField { position: static; }
   .userRow, .postRow { padding-right: 12px; padding-left: 12px; }
@@ -317,3 +318,6 @@
     animation-duration: 1.4s;
   }
 }
+
+.pagination{display:grid;justify-items:center;gap:8px;padding:20px 0}.pagination button{min-height:44px;padding:0 16px;border:1px solid var(--app-border);border-radius:8px;color:var(--app-text);background:var(--app-surface)}
+@media(max-width:767px){.userRow{grid-template-columns:44px minmax(0,1fr);gap:8px}.relationship{grid-column:2;white-space:normal;overflow-wrap:anywhere}.userIdentity strong,.userIdentity small{white-space:normal;overflow-wrap:anywhere}.postAuthor strong,.postAuthor small,.postRow p{overflow-wrap:anywhere}}

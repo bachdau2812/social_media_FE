@@ -689,5 +689,9 @@ export function useChatController(userId: string, initialTarget?: (ChatNavigatio
     setReplyTo(null);
   }, []);
 
-  return { ...messageActions, threads: threads.map((thread) => thread.lastMessageId && messageActions.isMessageDeleted(thread.id, thread.lastMessageId) ? { ...thread, preview: "Tin nhắn đã được thu hồi" } : thread), active, activeId, activeMessages: reactions.messages, selectReaction: reactions.select, userId, threadState, hasMoreThreads, loadingMoreThreads, threadPageError, loadMoreThreads, conversationState, retryConversation, messageState, hasMore, loadingOlder, sending, sendError, draft, setDraft, replyTo, setReplyTo, focused, setFocused, highlightedSeq, unread, mediaComposer, loadThreads, loadMessages, loadOlder, focusMessage, openConversation, closeConversation, send };
+  // Keep empty targets available to the composer, but share a message-only inbox across both surfaces.
+  const inboxThreads = threads.filter((thread) => (thread.lastMessageSeq ?? 0) > 0)
+    .map((thread) => thread.lastMessageId && messageActions.isMessageDeleted(thread.id, thread.lastMessageId)
+      ? { ...thread, preview: "Tin nhắn đã được thu hồi" } : thread);
+  return { ...messageActions, threads: inboxThreads, active, activeId, activeMessages: reactions.messages, selectReaction: reactions.select, userId, threadState, hasMoreThreads, loadingMoreThreads, threadPageError, loadMoreThreads, conversationState, retryConversation, messageState, hasMore, loadingOlder, sending, sendError, draft, setDraft, replyTo, setReplyTo, focused, setFocused, highlightedSeq, unread, mediaComposer, loadThreads, loadMessages, loadOlder, focusMessage, openConversation, closeConversation, send };
 }

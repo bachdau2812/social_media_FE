@@ -37,16 +37,7 @@
   gap: 14px;
   padding: 4px 0 18px;
 }
-.story-strip::before {
-  content: "";
-  position: absolute;
-  left: 40px;
-  right: 40px;
-  top: 33px;
-  height: 1px;
-  background: #e1e1dd;
-  z-index: 0;
-}
+
 .story-item {
   position: relative;
   z-index: 1;
@@ -354,16 +345,22 @@
   .feed-screen { padding-top: 0; }
   .home-sticky {
     position: sticky;
-    top: 0;
+    top: calc(var(--app-mobile-header-height) + var(--app-safe-top));
     padding-top: 8px;
     margin: 0 -12px;
     width: calc(100% + 24px);
     padding-left: 12px;
     padding-right: 12px;
-    border-bottom: 1px solid #e7e7e4;
+    border-bottom: 0;
   }
-  .feed-tabs { margin-bottom: 10px; }
+  .feed-tabs { margin-bottom: 10px; border-bottom: 0; }
+  .feed-tabs button,
+  .feed-tabs button.active { border-bottom: 0; }
   .story-strip { border-bottom: 0; padding-bottom: 14px; }
+  .story-strip::before,
+  .story-strip::after,
+  .story-row-wrap::before,
+  .story-row-wrap::after { display: none; content: none; }
   .post-stack { padding-top: 18px; gap: 30px; }
   .post-author,
   .post-card .action-bar,

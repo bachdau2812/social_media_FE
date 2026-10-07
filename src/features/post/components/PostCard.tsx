@@ -1,5 +1,5 @@
 import { Archive, Check, ChevronLeft, ChevronRight, MessageCircle, MoreHorizontal, PenLine, Repeat2, Volume2, VolumeX, X } from "lucide-react";
-import { type MouseEvent, type RefCallback, useCallback, useEffect, useRef, useState } from "react";
+import { type MouseEvent, type RefCallback, useCallback, useEffect, useId, useRef, useState } from "react";
 import { Avatar as SharedAvatar } from "../../../shared/components";
 import type { Post } from "../model/post.types";
 import { postMediaRatioValue } from "../model/postMediaRatio";
@@ -10,13 +10,16 @@ import { AdjacentPostMediaPreloads } from "./AdjacentPostMediaPreloads";
 import { usePostInteraction } from "../hooks/usePostInteraction";
 import { useForegroundOverlay } from "../../../shared/overlays/useForegroundOverlay";
 import { ActionBar, EngagementListModal } from "./PostEngagement";
+import { useSheetHistoryRestore } from '../../../shared/overlays/useLocalSheetHistory';
 function Avatar({ src, label }: { src?: string; label: string }) { return <SharedAvatar src={src} name={label} alt={label} />; }
 function MusicIcon() { return <Volume2 size={18} />; }
 function activeMediaSupportsMusic(media: Post["media"][number]) { return media.type !== "VIDEO"; }
 
 export function PostCard({ post, index, viewerId, onOpen, onToggle, onEdit, onArchive, onOpenProfile }: { post: Post; index: number; viewerId: string; onOpen: () => void; onToggle: (postId: string, key: "liked" | "saved" | "reposted") => void; onEdit: () => void; onArchive: () => Promise<void>; onOpenProfile: (userId: string) => Promise<void> }) {
   const [expanded, setExpanded] = useState(false);
+  const engagementOwnerId = useId();
   const [engagementKind, setEngagementKind] = useState<"LIKES" | "REPOSTS" | null>(null);
+  useSheetHistoryRestore(id => { if (id === `post-${post.id}-card-${engagementOwnerId}-LIKES`) setEngagementKind('LIKES'); if (id === `post-${post.id}-card-${engagementOwnerId}-REPOSTS`) setEngagementKind('REPOSTS'); });
   const [menuOpen, setMenuOpen] = useState(false);
   const interaction = usePostInteraction(post.id, viewerId, "feed", Boolean(engagementKind));
   useForegroundOverlay(Boolean(engagementKind));
@@ -58,15 +61,15 @@ export function PostCard({ post, index, viewerId, onOpen, onToggle, onEdit, onAr
       {post.comments[0] && <button className="comment-preview" onClick={openPost}><strong>@{post.comments[0].author}</strong> {post.comments[0].text}</button>}
       <div className="post-meta"><time>{formatRelativeTime(post.createdAt)}</time></div>
     </div>
-    {engagementKind && <EngagementListModal postId={post.id} kind={engagementKind} viewerId={viewerId} onClose={() => setEngagementKind(null)} onOpenProfile={onOpenProfile} />}
+    {engagementKind && <EngagementListModal postId={post.id} kind={engagementKind} viewerId={viewerId} sheetId={`post-${post.id}-card-${engagementOwnerId}-${engagementKind}`} onClose={() => setEngagementKind(null)} onOpenProfile={onOpenProfile} />}
   </article>;
 }
 
 function FeedMediaLayer({ media, className, interactive = false, playbackEligible = false }: { media: Post["media"][number]; className: string; interactive?: boolean; playbackEligible?: boolean }) {
   return <span className={className} aria-hidden={interactive ? undefined : true}>
     {media.type === "VIDEO"
-      ? <PostVideoPlayer source={media.url} eligible={interactive && playbackEligible} preload={interactive ? "auto" : "metadata"} />
-      : <img src={media.url} alt={interactive ? media.alt : ""} draggable={false} />}
+      ? <PostVideoPlayer source={media.url} eligible={interactive && playbackEligible} preload={interactive && playbackEligible ? "auto" : "none"} />
+      : <img src={media.url} alt={interactive ? media.alt : ""} draggable={false} loading="lazy" decoding="async" />}
   </span>;
 }
 
@@ -76,9 +79,12 @@ function PostMediaCarousel({ post, onOpen, interactionRef }: { post: Post; onOpe
   const [transitionDirection, setTransitionDirection] = useState<"next" | "previous">("next");
   const [playbackActive, setPlaybackActive] = useState(false);
   const [feedSuspended, setFeedSuspended] = useState(false);
+  const [nearViewport, setNearViewport] = useState(false);
   const [musicMuted, setMusicMuted] = useState(false);
 
   const frameRef = useRef<HTMLDivElement | null>(null);
+  const swipeRef = useRef<{ x: number; y: number; axis: 'x' | 'y' | null } | null>(null);
+  const suppressClickRef = useRef(false);
   const setFrameRef = useCallback((node: HTMLDivElement | null) => {
     frameRef.current = node;
     interactionRef(node);
@@ -120,6 +126,12 @@ function PostMediaCarousel({ post, onOpen, interactionRef }: { post: Post; onOpe
       unsubscribe();
       reportFeedMusicVisibility(post.id, 0);
     };
+  }, [post.id]);
+  useEffect(() => {
+    const target = frameRef.current;
+    if (!target || typeof IntersectionObserver === 'undefined') { setNearViewport(true); return; }
+    const observer = new IntersectionObserver(([entry]) => setNearViewport(Boolean(entry?.isIntersecting)), { rootMargin: '400px 0px' });
+    observer.observe(target); return () => observer.disconnect();
   }, [post.id]);
 
   useEffect(() => {
@@ -196,8 +208,23 @@ function PostMediaCarousel({ post, onOpen, interactionRef }: { post: Post; onOpe
   }
 
   if (!post.media.length) return <button ref={interactionRef} className="media-button text-media" onClick={onOpen}><div className="text-post" title={post.caption || "No caption"}>{post.caption || "No caption"}</div></button>;
-  return <div ref={setFrameRef} className="post-media-frame" style={{ aspectRatio: frameAspectRatio }} tabIndex={0} onKeyDown={(event) => { if (event.key === "ArrowLeft") move(-1); if (event.key === "ArrowRight") move(1); }}>
-    <div className="media-surface feed-media-stage" role="button" tabIndex={0} onClick={onOpen} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") onOpen(); }}>
+  return <div ref={setFrameRef} className="post-media-frame" style={{ aspectRatio: frameAspectRatio, touchAction: 'pan-y pinch-zoom' }} tabIndex={0} onTouchStart={event => {
+    suppressClickRef.current = false;
+    const touch = event.touches[0];
+    swipeRef.current = touch && event.touches.length === 1 ? { x: touch.clientX, y: touch.clientY, axis: null } : null;
+  }} onTouchMove={event => {
+    const start = swipeRef.current, touch = event.touches[0];
+    if (!start || !touch) return;
+    const dx = Math.abs(touch.clientX - start.x), dy = Math.abs(touch.clientY - start.y);
+    if (!start.axis && Math.max(dx, dy) > 12) start.axis = dx > dy * 1.4 ? 'x' : 'y';
+    if (start.axis === 'x') { suppressClickRef.current = true; event.stopPropagation(); }
+  }} onTouchCancel={() => { swipeRef.current = null; }} onTouchEnd={event => {
+    const start = swipeRef.current, touch = event.changedTouches[0]; swipeRef.current = null;
+    if (!start || !touch || start.axis !== 'x') return;
+    event.stopPropagation();
+    if (Math.abs(touch.clientX - start.x) > 48) move(touch.clientX < start.x ? 1 : -1);
+  }} onKeyDown={(event) => { if (event.key === "ArrowLeft") move(-1); if (event.key === "ArrowRight") move(1); }}>
+    <div className="media-surface feed-media-stage" role="button" tabIndex={0} onClick={() => { if (suppressClickRef.current) { suppressClickRef.current = false; return; } onOpen(); }} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") onOpen(); }}>
       {previousMedia && <FeedMediaLayer media={previousMedia} className={"feed-media-content exiting slide-" + transitionDirection} />}
       <FeedMediaLayer key={activeMedia.id} media={activeMedia} className={previousMedia ? "feed-media-content entering slide-" + transitionDirection : "feed-media-content"} interactive playbackEligible={playbackActive && !feedSuspended} />
     </div>
@@ -206,7 +233,7 @@ function PostMediaCarousel({ post, onOpen, interactionRef }: { post: Post; onOpe
     {canPlayMusic && <button type="button" className="feed-music-mute" onClick={toggleMusicMuted} aria-label={musicMuted ? "Unmute music" : "Mute music"} aria-pressed={musicMuted}>{musicMuted ? <VolumeX size={15} /> : <Volume2 size={15} />}</button>}
     {hasMany && <><button className="carousel-control previous" onClick={() => move(-1)} disabled={activeIndex === 0 || previousMediaIndex !== null} aria-label="Previous media"><ChevronLeft size={19} /></button><button className="carousel-control next" onClick={() => move(1)} disabled={activeIndex === post.media.length - 1 || previousMediaIndex !== null} aria-label="Next media"><ChevronRight size={19} /></button><span className="media-counter">{String(activeIndex + 1).padStart(2, "0")} / {String(post.media.length).padStart(2, "0")}</span><span className="media-progress"><i style={{ width: `${((activeIndex + 1) / post.media.length) * 100}%` }} /></span></>}
     <audio ref={audioRef} preload="metadata" muted={musicMuted} />
-    <AdjacentPostMediaPreloads media={post.media} activeIndex={activeIndex} />
+    <AdjacentPostMediaPreloads media={post.media} activeIndex={activeIndex} enabled={nearViewport && !feedSuspended} />
   </div>;
 }
 

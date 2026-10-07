@@ -60,6 +60,7 @@ export type StoryViewerDto = {
   avatarUrl?: string | null;
   reaction?: string | null;
   viewedAt: string;
+  viewerFollowsUser?: boolean;
 };
 
 export type Page<T> = { content: T[]; pageNumber: number; totalElements: number; totalPages: number };

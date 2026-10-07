@@ -49,8 +49,19 @@ export type ProfilePostDto = {
   repostCount: number;
   likedByCurrentUser: boolean;
   repostedByCurrentUser: boolean;
+  savedByCurrentUser?: boolean;
   createdAt: string | null;
   updatedAt: string | null;
+};
+
+export type ProfilePostPageDto = {
+  userId: string;
+  posts: ProfilePostDto[];
+  pageNumber: number;
+  pageSize: number;
+  hasMore: boolean;
+  hasPrevious: boolean;
+  selectedPostFound: boolean;
 };
 
 export type ProfileDto = {

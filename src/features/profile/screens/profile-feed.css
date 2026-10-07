@@ -1,0 +1,18 @@
+.profile-feed-screen { width: 100%; max-width: 630px; margin-inline: auto; min-width: 0; }
+.profile-feed-desktop-title { padding: 16px 0; text-align: center; }
+.profile-feed-desktop-title span { color: var(--app-text-muted); font-size: 13px; }
+.profile-feed-desktop-title h1 { margin: 4px 0; font-size: 20px; }
+.profile-feed-item { min-width: 0; overflow-anchor: none; }
+.profile-feed-loading, .profile-feed-state { padding: 24px 16px; color: var(--app-text-muted); text-align: center; }
+.profile-feed-page-action, .profile-feed-state button, .profile-feed-media-error button {
+  min-height: var(--app-touch-target); border: 1px solid var(--app-border); border-radius: var(--app-radius-md);
+  padding: 10px 16px; background: var(--app-surface); color: var(--app-text); cursor: pointer;
+}
+.profile-feed-page-action { display: block; margin: 16px auto; }
+.profile-feed-page-action:disabled { opacity: .55; cursor: wait; }
+.profile-feed-media-error { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 12px; color: var(--app-danger); font-size: 14px; }
+.profile-feed-sentinel { height: 1px; }
+@media (max-width: 767px) {
+  .profile-feed-desktop-title { display: none; }
+  .profile-feed-screen { padding-top: 8px; }
+}

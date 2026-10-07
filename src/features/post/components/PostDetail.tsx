@@ -1,5 +1,5 @@
 import { Archive, Bookmark, Check, ChevronLeft, ChevronRight, Heart, Home, Lock, MessageCircle, MoreHorizontal, Pause, PenLine, RefreshCw, Repeat2, Reply, Send, Users, Volume2, VolumeX, WifiOff, X } from "lucide-react";
-import { type ChangeEvent, type FormEvent, type MouseEvent, type RefCallback, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { type ChangeEvent, type FormEvent, type MouseEvent, type RefCallback, useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { uploadCloudinaryMedia } from "../../../shared/api";
 import { Avatar as SharedAvatar } from "../../../shared/components";
@@ -18,20 +18,44 @@ import { PostVideoPlayer } from "./PostVideoPlayer";
 import { ActionBar, EngagementListModal } from "./PostEngagement";
 import { usePostInteraction } from "../hooks/usePostInteraction";
 import { useForegroundOverlay } from "../../../shared/overlays/useForegroundOverlay";
+import { MobileSheet } from "../../../shared/overlays/MobileSheet";
+import { useSheetHistoryRestore } from '../../../shared/overlays/useLocalSheetHistory';
 type PostDetails = PostDetailsDto;
 type CommentMediaViewer = { url: string; video: boolean };
 type CommentNode = CommentDto & { replies: CommentNode[] };
+type DiscussionDraft = { text: string; reply: CommentDto | null; media: CommentMediaSelection | null; pending: Set<string> };
+const discussionDrafts = new Map<string, DiscussionDraft>();
+function discussionDraft(key: string): DiscussionDraft {
+  let draft = discussionDrafts.get(key);
+  if (!draft) {
+    draft = { text: '', reply: null, media: null, pending: new Set() };
+    discussionDrafts.set(key, draft);
+    if (discussionDrafts.size > 10) {
+      const oldest = discussionDrafts.keys().next().value!;
+      const expired = discussionDrafts.get(oldest);
+      if (expired?.media) URL.revokeObjectURL(expired.media.previewUrl);
+      discussionDrafts.delete(oldest);
+    }
+  }
+  return draft;
+}
+export function PostDetail(props: Parameters<typeof PostDetailContent>[0]) {
+  return <PostDetailContent key={`${props.viewerId}:${props.post.id}`} {...props} />;
+}
 function Avatar({ src, label }: { src?: string; label: string }) { return <SharedAvatar src={src} name={label} alt={label} />; }
 function formatCount(value: number) { return value >= 1000 ? `${(value / 1000).toFixed(value >= 10000 ? 0 : 1)}k` : String(value); }
 function sortComments(items: CommentDto[], mode: "RELEVANT" | "RECENT") { return [...items].sort((left, right) => { if (mode === "RELEVANT") { const leftReplies = items.filter((item) => item.parentId === left.id).length; const rightReplies = items.filter((item) => item.parentId === right.id).length; if (leftReplies !== rightReplies) return rightReplies - leftReplies; } return new Date(right.timestamp ?? 0).getTime() - new Date(left.timestamp ?? 0).getTime(); }); }
 function buildCommentTree(items: CommentDto[], mode: "RELEVANT" | "RECENT") { const nodes = new Map<string, CommentNode>(); sortComments(items, mode).forEach((item) => nodes.set(item.id, { ...item, replies: [] })); const roots: CommentNode[] = []; nodes.forEach((node) => { if (node.parentId && nodes.has(node.parentId)) nodes.get(node.parentId)?.replies.push(node); else roots.push(node); }); return roots; }
-export function PostDetail({ post, viewerId, targetCommentId, onClose, onTogglePost, onCommentCreated, onEdit, onArchive, onOpenProfile }: { post: Post; viewerId: string; targetCommentId?: string | null; onClose: () => void; onTogglePost: (postId: string, key: "liked" | "saved" | "reposted") => void; onCommentCreated: (postId: string) => void; onEdit: () => void; onArchive: () => void; onOpenProfile: (userId: string) => Promise<void> }) {
+function PostDetailContent({ post, presentation = "detail", viewerId, targetCommentId, onClose, onTogglePost, onCommentCreated, onEdit, onArchive, onOpenProfile }: { post: Post; presentation?: "detail" | "discussion"; viewerId: string; targetCommentId?: string | null; onClose: () => void; onTogglePost: (postId: string, key: "liked" | "saved" | "reposted") => void; onCommentCreated: (postId: string) => void; onEdit: () => void; onArchive: () => void; onOpenProfile: (userId: string) => Promise<void> }) {
   useBodyScrollLock(true);
+  const draft = discussionDraft(`${viewerId}:${post.id}`);
   const [detailPost, setDetailPost] = useState(post);
   const [comments, setComments] = useState<CommentDto[]>([]);
   const [commentState, setCommentState] = useState<"loading" | "ready" | "error">("loading");
   const [detailMediaReady, setDetailMediaReady] = useState(false);
+  const engagementOwnerId = useId();
   const [engagementKind, setEngagementKind] = useState<"LIKES" | "REPOSTS" | null>(null);
+  useSheetHistoryRestore(id => { if (id === `post-${post.id}-detail-${engagementOwnerId}-LIKES`) setEngagementKind('LIKES'); if (id === `post-${post.id}-detail-${engagementOwnerId}-REPOSTS`) setEngagementKind('REPOSTS'); });
   const [expandedCommentMedia, setExpandedCommentMedia] = useState<CommentMediaViewer | null>(null);
   const interactionOverlayOpen = Boolean(engagementKind || expandedCommentMedia);
   const interaction = usePostInteraction(post.id, viewerId, "detail", interactionOverlayOpen);
@@ -40,15 +64,16 @@ export function PostDetail({ post, viewerId, targetCommentId, onClose, onToggleP
   const [commentPage, setCommentPage] = useState(0);
   const [commentHasMore, setCommentHasMore] = useState(false);
   const [loadingMoreComments, setLoadingMoreComments] = useState(false);
+  const [moreCommentsError, setMoreCommentsError] = useState(false);
   const [activeMediaIndex, setActiveMediaIndex] = useState(0);
   const [previousMediaIndex, setPreviousMediaIndex] = useState<number | null>(null);
   const [mediaTransition, setMediaTransition] = useState<"next" | "previous">("next");
   const [musicMuted, setMusicMuted] = useState(false);
-  const [replyTarget, setReplyTarget] = useState<CommentDto | null>(null);
-  const [commentText, setCommentText] = useState("");
+  const [replyTarget, setReplyTarget] = useState<CommentDto | null>(draft.reply);
+  const [commentText, setCommentText] = useState(draft.text);
   const [sending, setSending] = useState(false);
   const [submitError, setSubmitError] = useState("");
-  const [commentMedia, setCommentMedia] = useState<CommentMediaSelection | null>(null);
+  const [commentMedia, setCommentMedia] = useState<CommentMediaSelection | null>(draft.media);
   const [commentReloadToken, setCommentReloadToken] = useState(0);
   const [commentFocusChain, setCommentFocusChain] = useState<string[]>([]);
   const [highlightedCommentId, setHighlightedCommentId] = useState<string | null>(null);
@@ -62,11 +87,12 @@ export function PostDetail({ post, viewerId, targetCommentId, onClose, onToggleP
   const mediaTransitioningRef = useRef(false);
   const composerRef = useRef<HTMLTextAreaElement | null>(null);
   const commentFileInputRef = useRef<HTMLInputElement | null>(null);
-  const pendingMediaCommentIds = useRef<Set<string>>(new Set());
+  const pendingMediaCommentIds = useRef<Set<string>>(draft.pending);
   const commentFocusResolvedRef = useRef("");
+  const discussionRef = useRef<HTMLElement | null>(null);
   const commentsRestricted = false;
   const activeMedia = detailPost.media[activeMediaIndex];
-  const activeMusic = detailPost.music ?? activeMedia?.music ?? null;
+  const activeMusic = presentation === 'detail' ? detailPost.music ?? activeMedia?.music ?? null : null;
   const playbackKey = activeMusic ? (detailPost.music ? "post:" + detailPost.id + ":" + activeMusic.id : "item:" + activeMedia?.id + ":" + activeMusic.id) : null;
   const roots: CommentNode[] = comments.map((item) => ({ ...item, replies: [] }));
 
@@ -110,13 +136,12 @@ export function PostDetail({ post, viewerId, targetCommentId, onClose, onToggleP
 
   useEffect(() => {
     let active = true;
-    setCommentState("loading");
-    setCommentPage(0);
+    if (commentReloadToken === 0) { setCommentState("loading"); setCommentPage(0); }
     commentApi.pageByPost(post.id, viewerId)
       .then((page) => {
         if (active) {
-          setComments(page.content ?? []);
-          setCommentHasMore(page.pageNumber + 1 < page.totalPages);
+          setComments(current => commentReloadToken === 0 ? page.content ?? [] : [...(page.content ?? []), ...current.filter(item => !page.content?.some(fresh => fresh.id === item.id))]);
+          if (commentReloadToken === 0) setCommentHasMore(page.pageNumber + 1 < page.totalPages);
           setCommentState("ready");
         }
       })
@@ -176,7 +201,7 @@ export function PostDetail({ post, viewerId, targetCommentId, onClose, onToggleP
     let clearTimer = 0;
     const reveal = () => {
       if (cancelled) return;
-      const target = document.querySelector<HTMLElement>(`[data-comment-id="${CSS.escape(targetCommentId)}"]`);
+      const target = discussionRef.current?.querySelector<HTMLElement>(`[data-comment-id="${CSS.escape(targetCommentId)}"]`);
       if (target) {
         target.scrollIntoView({ block: "center", behavior: attempts > 8 ? "auto" : "smooth" });
         setHighlightedCommentId(targetCommentId);
@@ -193,9 +218,11 @@ export function PostDetail({ post, viewerId, targetCommentId, onClose, onToggleP
     };
   }, [commentFocusChain, targetCommentId]);
 
-  useEffect(() => () => {
-    if (commentMedia?.previewUrl) URL.revokeObjectURL(commentMedia.previewUrl);
-  }, [commentMedia]);
+  useEffect(() => {
+    draft.text = commentText; draft.reply = replyTarget;
+    if (draft.media && draft.media !== commentMedia) URL.revokeObjectURL(draft.media.previewUrl);
+    draft.media = commentMedia;
+  }, [draft, commentText, replyTarget, commentMedia]);
 
   useEffect(() => () => {
     if (mediaTransitionTimerRef.current !== null) window.clearTimeout(mediaTransitionTimerRef.current);
@@ -268,13 +295,13 @@ export function PostDetail({ post, viewerId, targetCommentId, onClose, onToggleP
         if (event.key === "Escape") setExpandedCommentMedia(null);
         return;
       }
-      if (event.key === "Escape") onClose();
+      if (event.key === "Escape" && !engagementKind && presentation === 'detail') onClose();
       if (event.key === "ArrowLeft") moveMedia(-1);
       if (event.key === "ArrowRight") moveMedia(1);
     }
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [activeMediaIndex, detailPost.media.length, expandedCommentMedia, onClose]);
+  }, [activeMediaIndex, detailPost.media.length, expandedCommentMedia, engagementKind, presentation, onClose]);
 
   function handleSwipeEnd(value: number) {
     if (touchStart === null) return;
@@ -287,6 +314,7 @@ export function PostDetail({ post, viewerId, targetCommentId, onClose, onToggleP
     if (loadingMoreComments || !commentHasMore) return;
     const nextPage = commentPage + 1;
     setLoadingMoreComments(true);
+    setMoreCommentsError(false);
     try {
       const page = await commentApi.pageByPost(post.id, viewerId, nextPage, 10);
       setComments((current) => {
@@ -295,6 +323,8 @@ export function PostDetail({ post, viewerId, targetCommentId, onClose, onToggleP
       });
       setCommentPage(page.pageNumber);
       setCommentHasMore(page.pageNumber + 1 < page.totalPages);
+    } catch {
+      setMoreCommentsError(true);
     } finally {
       setLoadingMoreComments(false);
     }
@@ -350,15 +380,22 @@ export function PostDetail({ post, viewerId, targetCommentId, onClose, onToggleP
       });
       if (selectedMedia) {
         pendingMediaCommentIds.current.add(response.commentId);
+        draft.text = ''; draft.reply = null;
+        if (draft.media) URL.revokeObjectURL(draft.media.previewUrl);
+        draft.media = null;
         window.dispatchEvent(new CustomEvent("app-toast", { detail: response.message || "Media is being reviewed." }));
         setCommentText("");
         clearCommentMedia();
         setReplyTarget(null);
         return;
       }
-      setCommentReloadToken((value) => value + 1);
+      try {
+        const created = await commentApi.byId(response.commentId);
+        if (!created.parentId) setComments(current => [created, ...current.filter(item => item.id !== created.id)]);
+      } catch { setCommentReloadToken(value => value + 1); }
       setCommentRevision((value) => value + 1);
       onCommentCreated(post.id);
+      draft.text = ''; draft.reply = null;
       setCommentText("");
       setReplyTarget(null);
     } catch (error) {
@@ -370,11 +407,11 @@ export function PostDetail({ post, viewerId, targetCommentId, onClose, onToggleP
 
   const mediaViewer = <DetailMediaViewer loading={!detailMediaReady} post={detailPost} activeIndex={activeMediaIndex} previousIndex={previousMediaIndex} transitionDirection={mediaTransition} musicMuted={musicMuted} onToggleMusicMuted={() => setMusicMuted((value) => !value)} onMove={moveMedia} onTouchStart={setTouchStart} onTouchEnd={handleSwipeEnd} />;
 
-  return (
-    <div className="modal-backdrop post-detail-backdrop" role="dialog" aria-modal="true" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
-      <section ref={interaction.ref} className="post-detail" onMouseDown={(event) => event.stopPropagation()}>
-        <button className="icon-button close detail-close" onClick={onClose} aria-label="Close"><X size={22} /></button>
-        <div className="detail-media">{mediaViewer}</div>
+  const content = (
+    <div className="modal-backdrop post-detail-backdrop" role={presentation === 'detail' ? 'dialog' : undefined} aria-modal={presentation === 'detail' ? true : undefined} onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
+      <section ref={node => { discussionRef.current = node; interaction.ref(node); }} className="post-detail" onMouseDown={(event) => event.stopPropagation()}>
+        {presentation === 'detail' && <button className="icon-button close detail-close" onClick={onClose} aria-label="Close"><X size={22} /></button>}
+        {presentation === "detail" && <div className="detail-media">{mediaViewer}</div>}
         <aside className="detail-panel">
           <header className="detail-author">
             <button className="detail-author-profile" onClick={() => void onOpenProfile(detailPost.author.id)} aria-label={"Open profile for " + detailPost.author.username}><Avatar src={detailPost.author.avatarUrl} label={detailPost.author.username} /></button>
@@ -394,7 +431,7 @@ export function PostDetail({ post, viewerId, targetCommentId, onClose, onToggleP
             {!commentsRestricted && commentState === "error" && <CommentState icon={WifiOff} title="Could not load comments" detail="Check the backend connection and try again." />}
             {!commentsRestricted && commentState === "ready" && roots.length === 0 && <CommentState icon={MessageCircle} title="No comments yet" detail="Be the first to share a reply." />}
             {!commentsRestricted && commentState === "ready" && roots.length > 0 && <div className="detail-comments">{roots.map((item) => <CommentThread key={item.id} item={item} depth={0} viewerId={viewerId} postAuthorId={detailPost.author.id} reloadToken={commentRevision} focusChain={commentFocusChain} focusedCommentId={highlightedCommentId} onLike={toggleCommentLike} onReply={setReplyTarget} onOpenMedia={(url, video) => setExpandedCommentMedia({ url, video })} onOpenProfile={onOpenProfile} />)}</div>}
-            {!commentsRestricted && commentState === "ready" && commentHasMore && <button className="load-more-comments" onClick={() => void loadMoreComments()} disabled={loadingMoreComments}>{loadingMoreComments ? "Loading..." : "Load more comments"}</button>}
+            {!commentsRestricted && commentState === "ready" && commentHasMore && <button className="load-more-comments" onClick={() => void loadMoreComments()} disabled={loadingMoreComments}>{loadingMoreComments ? "Loading..." : moreCommentsError ? "Retry loading comments" : "Load more comments"}</button>}
           </div>
           <section className="detail-engagement-footer" aria-label="Post engagement">
             <ActionBar post={detailPost} onToggle={onTogglePost} onComment={() => composerRef.current?.focus()} onOpenEngagement={setEngagementKind} showCounts={false} />
@@ -417,7 +454,7 @@ export function PostDetail({ post, viewerId, targetCommentId, onClose, onToggleP
           />
         </aside>
         <audio ref={audioRef} className="detail-music-audio" preload="metadata" muted={musicMuted} />
-        {engagementKind && <EngagementListModal postId={detailPost.id} kind={engagementKind} viewerId={viewerId} onClose={() => setEngagementKind(null)} onOpenProfile={onOpenProfile} />}
+        {engagementKind && <EngagementListModal postId={detailPost.id} kind={engagementKind} viewerId={viewerId} sheetId={`post-${post.id}-detail-${engagementOwnerId}-${engagementKind}`} onClose={() => setEngagementKind(null)} onOpenProfile={onOpenProfile} />}
         {expandedCommentMedia && createPortal(<div className="comment-media-lightbox" role="dialog" aria-modal="true" aria-label="Comment media viewer" onClick={() => setExpandedCommentMedia(null)}>
           <button type="button" className="comment-media-lightbox-close" onClick={() => setExpandedCommentMedia(null)} aria-label="Close media viewer"><X size={22} /></button>
           <div className="comment-media-lightbox-content" onClick={(event) => event.stopPropagation()}>
@@ -427,6 +464,7 @@ export function PostDetail({ post, viewerId, targetCommentId, onClose, onToggleP
       </section>
     </div>
   );
+  return presentation === 'discussion' ? <MobileSheet title="Comments" onClose={onClose} className="post-discussion-sheet">{content}</MobileSheet> : content;
 }
 function PostDiscussionIntro({ post }: { post: Post }) {
   const hashtags = (post.hashtags ?? []).map((tag) => "#" + tag).join(" ");
@@ -525,6 +563,11 @@ function CommentThread({ item, depth, viewerId, postAuthorId, reloadToken, focus
   const [showReplies, setShowReplies] = useState(false);
   const [replies, setReplies] = useState<CommentDto[]>([]);
   const [replyState, setReplyState] = useState<"idle" | "loading" | "ready" | "error">("idle");
+  const [replyPage, setReplyPage] = useState(0);
+  const [replyHasMore, setReplyHasMore] = useState(false);
+  const [moreReplyState, setMoreReplyState] = useState<'idle' | 'loading' | 'error'>('idle');
+  const [retryToken, setRetryToken] = useState(0);
+  const replyPagesRef = useRef(1);
   const replyCount = item.replyCount ?? item.replies.length;
   const canReply = depth < 2;
   useEffect(() => {
@@ -535,16 +578,28 @@ function CommentThread({ item, depth, viewerId, postAuthorId, reloadToken, focus
     if (!showReplies || !canReply) return;
     let active = true;
     setReplyState("loading");
-    commentApi.replies(item.id, viewerId)
-      .then((items) => { if (active) { setReplies(items ?? []); setReplyState("ready"); } })
+    const size = replyPagesRef.current * 10;
+    commentApi.replies(item.id, viewerId, 0, size)
+      .then((items) => { if (active) { setReplies(items ?? []); setReplyHasMore((items?.length ?? 0) >= size); setReplyState("ready"); } })
       .catch(() => { if (active) setReplyState("error"); });
     return () => { active = false; };
-  }, [showReplies, item.id, viewerId, canReply, reloadToken]);
+  }, [showReplies, item.id, viewerId, canReply, reloadToken, retryToken]);
+  async function loadMoreReplies() {
+    if (moreReplyState === 'loading') return;
+    setMoreReplyState('loading');
+    try {
+      const items = await commentApi.replies(item.id, viewerId, replyPage + 1, 10);
+      setReplies(current => [...current, ...items.filter(item => !current.some(existing => existing.id === item.id))]);
+      replyPagesRef.current += 1;
+      setReplyPage(value => value + 1); setReplyHasMore(items.length === 10); setMoreReplyState('idle');
+    } catch { setMoreReplyState('error'); }
+  }
   return <div data-comment-id={item.id} className={`comment-thread depth-${depth}${depth > 0 ? " reply" : ""}${focusedCommentId === item.id ? " notification-comment-highlight" : ""}`}>
     <CommentRow item={item} depth={depth} viewerId={viewerId} postAuthorId={postAuthorId} liked={Boolean(item.hasLiked)} onLike={onLike} onReply={canReply ? onReply : undefined} onOpenMedia={onOpenMedia} onOpenProfile={onOpenProfile} />
     {canReply && replyCount > 0 && <button className="load-replies" onClick={() => setShowReplies((value) => !value)} aria-expanded={showReplies}><span aria-hidden="true" />{showReplies ? "Hide replies" : "View replies"}</button>}
     {showReplies && replyState === "loading" && <div className="reply-loading">Loading replies...</div>}
-    {showReplies && replyState === "error" && <button className="reply-load-error" onClick={() => setShowReplies(false)}>Could not load replies · Close</button>}
+    {showReplies && replyState === "error" && <button className="reply-load-error" onClick={() => setRetryToken(value => value + 1)}>Retry loading replies</button>}
     {showReplies && replyState === "ready" && replies.map((reply) => <CommentThread key={reply.id} item={{ ...reply, replies: [] }} depth={depth + 1} viewerId={viewerId} postAuthorId={postAuthorId} reloadToken={reloadToken} focusChain={focusChain} focusedCommentId={focusedCommentId} onLike={onLike} onReply={onReply} onOpenMedia={onOpenMedia} onOpenProfile={onOpenProfile} />)}
+    {showReplies && replyState === 'ready' && replyHasMore && <button className="load-replies" disabled={moreReplyState === 'loading'} onClick={() => void loadMoreReplies()}>{moreReplyState === 'error' ? 'Retry loading replies' : moreReplyState === 'loading' ? 'Loading replies...' : 'Load more replies'}</button>}
   </div>;
 }function CommentState({ icon: Icon, title, detail }: { icon: typeof Home; title: string; detail: string }) { return <div className="comment-state"><Icon size={22} /><strong>{title}</strong><span>{detail}</span></div>; }

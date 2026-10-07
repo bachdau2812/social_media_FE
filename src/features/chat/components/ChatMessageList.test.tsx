@@ -187,3 +187,43 @@ describe("ChatMessageList", () => {
     expect(screen.getByText("Tin không hiển thị")).toBeInTheDocument();
   });
 });
+
+it.each([false, true])("offers new messages without moving a reader in history (%s)", (compact) => {
+  const current = controller([message("1", "other")]);
+  const props = { controller: current, userId: "me", compact, onOpenMedia: vi.fn(), onOpenStory: vi.fn() };
+  const { container, rerender } = render(<ChatMessageList {...props} />);
+  const list = container.querySelector(compact ? ".floating-message-stream" : ".dm-message-history") as HTMLElement;
+  Object.defineProperties(list, { scrollHeight: { configurable: true, value: 1000 }, clientHeight: { configurable: true, value: 200 } });
+  list.scrollTop = 120; fireEvent.scroll(list);
+  current.activeMessages = [...current.activeMessages, message("2", "other")] as Controller["activeMessages"];
+  rerender(<ChatMessageList {...props} />);
+  expect(list.scrollTop).toBe(120);
+  fireEvent.click(screen.getByRole("button", { name: "Tin nhắn mới" }));
+  expect(list.scrollTop).toBe(1000);
+});
+
+it.each([false, true])("keeps the bottom pinned when the composer or media changes size (%s)", (compact) => {
+  let resize!: ResizeObserverCallback;
+  vi.stubGlobal("ResizeObserver", class { constructor(callback: ResizeObserverCallback) { resize = callback; } observe() {} disconnect() {} });
+  const { container } = render(<ChatMessageList controller={controller([message("1", "other")])} userId="me" compact={compact} onOpenMedia={vi.fn()} onOpenStory={vi.fn()} />);
+  const list = container.querySelector(compact ? ".floating-message-stream" : ".dm-message-history") as HTMLElement;
+  Object.defineProperty(list, "scrollHeight", { configurable: true, value: 1200 });
+  resize([], {} as ResizeObserver);
+  expect(list.scrollTop).toBe(1200);
+  vi.unstubAllGlobals();
+});
+
+it("does not announce an optimistic ID replacement or subsequent history prepend as a new message", () => {
+ const current = controller([message("2", "other")]);
+ const props = { controller: current, userId: "me", onOpenMedia: vi.fn(), onOpenStory: vi.fn() };
+ const { container, rerender } = render(<ChatMessageList {...props} />);
+ const list = container.querySelector(".dm-message-history") as HTMLElement;
+ Object.defineProperties(list, { scrollHeight: { configurable: true, value: 1000 }, clientHeight: { configurable: true, value: 200 } });
+ list.scrollTop = 120; fireEvent.scroll(list);
+ current.activeMessages = [{ ...message("2", "other"), id: "persisted-id" }] as Controller["activeMessages"];
+ rerender(<ChatMessageList {...props} />);
+ expect(screen.queryByRole("button", { name: "Tin nh\u1eafn m\u1edbi" })).toBeNull();
+ current.activeMessages = [message("1", "other"), ...current.activeMessages] as Controller["activeMessages"];
+ rerender(<ChatMessageList {...props} />);
+ expect(screen.queryByRole("button", { name: "Tin nh\u1eafn m\u1edbi" })).toBeNull();
+});
