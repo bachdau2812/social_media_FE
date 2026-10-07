@@ -1,7 +1,6 @@
 import { Archive, Briefcase, Check, ChevronRight, ExternalLink, GraduationCap, House, Library, Link2, MapPin, PenLine, Plus, RefreshCw, Search, Trash2, User, Users, Video, WifiOff, X, type LucideIcon } from "lucide-react";
 import { type ReactNode, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { apiGet, apiSend } from "../../../shared/api";
 import { Avatar as SharedAvatar } from "../../../shared/components";
 import { useBodyScrollLock } from "../../../shared/overlays/useBodyScrollLock";
 import { StoryHighlights, type StoryHighlightDto } from "../../story";
@@ -10,13 +9,9 @@ import type { Profile } from "../model/profile.types";
 import { ProfileRelationshipActions, type ProfileRelationship } from "../components/ProfileRelationshipActions";
 import { SimilarUsersSection, type SimilarUser } from "../components/SimilarUsersSection";
 import { AvatarUploader } from "../components/AvatarUploader";
-
-export type ConnectionTab = "FOLLOWERS" | "FOLLOWING" | "FRIENDS";
-export type ConnectionUserDto = { id: string; userId: string; username: string; displayName: string; avatarUrl?: string | null; mutualContext?: string | null; relationshipAction: string; viewerFollowsUser: boolean; userFollowsViewer: boolean; friend: boolean; followedAt?: string | null };
-type ConnectionsDto = { profileUserId: string; tab: ConnectionTab; users: ConnectionUserDto[]; totalCount: number; currentPage: number; pageSize: number; hasNextPage: boolean; hasPreviousPage: boolean };
-type Page<T> = { content: T[]; pageNumber: number; totalElements: number; totalPages: number };
-type UserDiscoveryDto = { userId: string; username: string; fullName?: string | null; avatarUrl?: string | null; viewerFollowsUser: boolean; userFollowsViewer: boolean; friend: boolean; relationship?: string | null };
-type LoadState = "idle" | "loading" | "ready" | "error";
+import { profileApi, type ConnectionTab, type ConnectionUserDto, type ProfileRecordKind } from "../api/profile.api";
+import { useProfileConnections } from "../hooks/useProfileConnections";
+import { useProfileRelationship } from "../hooks/useProfileRelationship";
 
 function Avatar({ src, label }: { src?: string; label: string }) { return <SharedAvatar src={src} name={label} alt={label} />; }
 function formatCount(value: number) { return value >= 1000 ? `${(value / 1000).toFixed(value >= 10000 ? 0 : 1)}k` : String(value); }
@@ -81,45 +76,19 @@ function ProfileConnectionActions({ viewerId, profile, onMessage, onOpenProfile,
     onRefresh: () => Promise<void>;
 }) {
     const [similarOpen, setSimilarOpen] = useState(false);
-    const [pending, setPending] = useState(false);
-    const serverRelationship: ProfileRelationship = profile.friend ? "friends" : profile.viewerFollows ? "following" : profile.userFollowsViewer ? "follows_you" : "none";
-    const [relationship, setRelationship] = useState<ProfileRelationship>(serverRelationship);
-    useEffect(() => setRelationship(serverRelationship), [serverRelationship]);
-    async function follow() {
-        const previous = relationship;
-        setRelationship(profile.userFollowsViewer ? "friends" : "following");
-        setPending(true);
-        try {
-            await apiSend("/user-followers/follow", "POST", { followerId: viewerId, followingId: profile.id });
-            await onRefresh();
-        }
-        catch {
-            setRelationship(previous);
-        }
-        finally {
-            setPending(false);
-        }
-    }
-    async function unfollow() {
-        const previous = relationship;
-        setRelationship(profile.userFollowsViewer ? "follows_you" : "none");
-        setPending(true);
-        try {
-            await apiSend(`/user-followers/unfollow?followerId=${encodeURIComponent(viewerId)}&followingId=${encodeURIComponent(profile.id)}`, "DELETE");
-            await onRefresh();
-        }
-        catch {
-            setRelationship(previous);
-        }
-        finally {
-            setPending(false);
-        }
-    }
+    const { relationship, pending, follow, unfollow } = useProfileRelationship({
+        viewerId,
+        profileId: profile.id,
+        viewerFollows: profile.viewerFollows,
+        userFollowsViewer: profile.userFollowsViewer,
+        friend: profile.friend,
+        onRefresh,
+    });
     async function loadSimilar({ profileId, signal }: {
         profileId: string;
         signal: AbortSignal;
     }): Promise<SimilarUser[]> {
-        const page = await apiGet<Page<UserDiscoveryDto>>(`/search/users/${encodeURIComponent(profileId)}/similar?viewerId=${encodeURIComponent(viewerId)}&page=0&size=20`, { signal });
+        const page = await profileApi.getSimilarUsers(profileId, viewerId, signal);
         return (page.content ?? []).map((item) => ({
             id: item.userId,
             username: item.username || item.userId,
@@ -129,10 +98,10 @@ function ProfileConnectionActions({ viewerId, profile, onMessage, onOpenProfile,
         }));
     }
     async function followSimilar(user: SimilarUser) {
-        await apiSend("/user-followers/follow", "POST", { followerId: viewerId, followingId: user.id });
+        await profileApi.follow(viewerId, user.id);
     }
     async function unfollowSimilar(user: SimilarUser) {
-        await apiSend(`/user-followers/unfollow?followerId=${encodeURIComponent(viewerId)}&followingId=${encodeURIComponent(user.id)}`, "DELETE");
+        await profileApi.unfollow(viewerId, user.id);
     }
     return <div className="profile-relationship-area">
     <ProfileRelationshipActions relationship={relationship} pending={pending} onFollow={follow} onUnfollow={unfollow} onMessage={() => onMessage(profile.id)} onFindSimilar={() => setSimilarOpen((value) => !value)}/>
@@ -214,7 +183,7 @@ function ProfileAboutPanel({ profile, onClose }: {
     {profile.socialLinks.length > 0 && <section><h3>Liên kết</h3>{profile.socialLinks.map((item) => <a className="about-link-row" key={item.id} href={item.link.startsWith("http") ? item.link : `https://${item.link}`} target="_blank" rel="noreferrer"><Link2 size={18}/><span><strong>{profileSocialLabel(item.link)}</strong><small>{item.link.replace(/^https?:\/\//, "")}</small></span><ExternalLink size={15}/></a>)}</section>}
   </div></section></div>, document.body);
 }
-type ProfileEditorKind = "JOB" | "UNIVERSITY" | "HIGH_SCHOOL" | "SOCIAL";
+type ProfileEditorKind = ProfileRecordKind;
 type ProfileEntryDraft = {
     kind: ProfileEditorKind;
     id?: string;
@@ -259,20 +228,20 @@ function ProfileInformationEditor({ profile, onClose, onSaved }: {
             return;
         const method = entry.id ? "PUT" : "POST";
         if (entry.kind === "JOB")
-            await commit(() => apiSend("/user-jobs", method, { id: entry.id, userId: profile.id, position: entry.primary.trim(), companyName: entry.secondary.trim() || null, from: entry.from || null, to: entry.to || null, isPublic: entry.isPublic }));
+            await commit(() => profileApi.saveJob({ id: entry.id, userId: profile.id, position: entry.primary.trim(), companyName: entry.secondary.trim() || null, from: entry.from || null, to: entry.to || null, isPublic: entry.isPublic }, method));
         if (entry.kind === "UNIVERSITY")
-            await commit(() => apiSend("/user-universities", method, { id: entry.id, userId: profile.id, schoolName: entry.primary.trim(), major: entry.secondary.trim() || null, from: entry.from || null, to: entry.to || null, isGraduate: entry.graduate, isPublic: entry.isPublic }));
+            await commit(() => profileApi.saveUniversity({ id: entry.id, userId: profile.id, schoolName: entry.primary.trim(), major: entry.secondary.trim() || null, from: entry.from || null, to: entry.to || null, isGraduate: entry.graduate, isPublic: entry.isPublic }, method));
         if (entry.kind === "HIGH_SCHOOL")
-            await commit(() => apiSend("/user-high-schools", method, { id: entry.id, userId: profile.id, schoolName: entry.primary.trim(), from: entry.from || null, to: entry.to || null, isGraduate: entry.graduate, isPublic: entry.isPublic }));
+            await commit(() => profileApi.saveHighSchool({ id: entry.id, userId: profile.id, schoolName: entry.primary.trim(), from: entry.from || null, to: entry.to || null, isGraduate: entry.graduate, isPublic: entry.isPublic }, method));
         if (entry.kind === "SOCIAL")
-            await commit(() => apiSend("/user-social-media", method, { id: entry.id, userId: profile.id, link: entry.primary.trim() }));
+            await commit(() => profileApi.saveSocialLink({ id: entry.id, userId: profile.id, link: entry.primary.trim() }, method));
     }
-    async function remove(kind: ProfileEditorKind, id: string) { const route = kind === "JOB" ? "user-jobs" : kind === "UNIVERSITY" ? "user-universities" : kind === "HIGH_SCHOOL" ? "user-high-schools" : "user-social-media"; await commit(() => apiSend(`/${route}/${encodeURIComponent(id)}`, "DELETE")); }
-    async function toggleJob(item: Profile["jobs"][number]) { await commit(() => apiSend("/user-jobs", "PUT", { id: item.id, isPublic: !item.isPublic })); }
-    async function toggleUniversity(item: Profile["universities"][number]) { await commit(() => apiSend("/user-universities", "PUT", { id: item.id, isPublic: !item.isPublic })); }
-    async function toggleHighSchool(item: Profile["highSchools"][number]) { await commit(() => apiSend("/user-high-schools", "PUT", { id: item.id, isPublic: !item.isPublic })); }
+    async function remove(kind: ProfileEditorKind, id: string) { await commit(() => profileApi.removeRecord(kind, id)); }
+    async function toggleJob(item: Profile["jobs"][number]) { await commit(() => profileApi.setRecordVisibility("JOB", item.id, !item.isPublic)); }
+    async function toggleUniversity(item: Profile["universities"][number]) { await commit(() => profileApi.setRecordVisibility("UNIVERSITY", item.id, !item.isPublic)); }
+    async function toggleHighSchool(item: Profile["highSchools"][number]) { await commit(() => profileApi.setRecordVisibility("HIGH_SCHOOL", item.id, !item.isPublic)); }
     return createPortal(<div className="profile-info-backdrop"><section className="profile-editor-panel" role="dialog" aria-modal="true" aria-label="Chỉnh sửa thông tin"><header><div><strong>Chỉnh sửa thông tin</strong></div><button className="icon-button" onClick={onClose} aria-label="Đóng"><X size={20}/></button></header><div className="profile-editor-body">
-    <section><h3>Nơi sống</h3><label><span>Thành phố hiện tại</span><input value={currentCity} onChange={(event) => setCurrentCity(event.target.value)} placeholder="Đà Nẵng"/></label><label><span>Quê quán</span><input value={hometown} onChange={(event) => setHometown(event.target.value)} placeholder="TP. Hồ Chí Minh"/></label><label><span>Sở thích</span><input value={hobbies} onChange={(event) => setHobbies(event.target.value)} placeholder="Photography, Football"/></label><button className="profile-editor-save" disabled={busy} onClick={() => void commit(() => apiSend("/user-details/update", "PUT", { userId: profile.id, livingIn: currentCity.trim(), homeTown: hometown.trim(), hobbieList: hobbies.split(",").map((item) => item.trim()).filter(Boolean) }))}>Lưu thông tin cơ bản</button></section>
+    <section><h3>Nơi sống</h3><label><span>Thành phố hiện tại</span><input value={currentCity} onChange={(event) => setCurrentCity(event.target.value)} placeholder="Đà Nẵng"/></label><label><span>Quê quán</span><input value={hometown} onChange={(event) => setHometown(event.target.value)} placeholder="TP. Hồ Chí Minh"/></label><label><span>Sở thích</span><input value={hobbies} onChange={(event) => setHobbies(event.target.value)} placeholder="Photography, Football"/></label><button className="profile-editor-save" disabled={busy} onClick={() => void commit(() => profileApi.updateBasicDetails({ userId: profile.id, livingIn: currentCity.trim(), homeTown: hometown.trim(), hobbieList: hobbies.split(",").map((item) => item.trim()).filter(Boolean) }))}>Lưu thông tin cơ bản</button></section>
     <ProfileEditorSection title="Công việc" onAdd={() => newEntry("JOB")}>{profile.jobs.map((item) => <ProfileEditorRow key={item.id} icon={Briefcase} title={profileJobLabel(item)} detail={profileDateRange(item.fromDate, item.toDate)} visible={item.isPublic} onToggle={() => void toggleJob(item)} onEdit={() => editJob(item)} onDelete={() => void remove("JOB", item.id)}/>)}</ProfileEditorSection>
     <ProfileEditorSection title="Đại học" onAdd={() => newEntry("UNIVERSITY")}>{profile.universities.map((item) => <ProfileEditorRow key={item.id} icon={GraduationCap} title={profileUniversityLabel(item)} detail={profileDateRange(item.from, item.to)} visible={item.isPublic} onToggle={() => void toggleUniversity(item)} onEdit={() => editUniversity(item)} onDelete={() => void remove("UNIVERSITY", item.id)}/>)}</ProfileEditorSection>
     <ProfileEditorSection title="Trường trung học" onAdd={() => newEntry("HIGH_SCHOOL")}>{profile.highSchools.map((item) => <ProfileEditorRow key={item.id} icon={Library} title={item.schoolName || "Trường trung học"} detail={profileDateRange(item.fromDate, item.toDate)} visible={item.isPublic} onToggle={() => void toggleHighSchool(item)} onEdit={() => editHighSchool(item)} onDelete={() => void remove("HIGH_SCHOOL", item.id)}/>)}</ProfileEditorSection>
@@ -313,15 +282,19 @@ export function ConnectionsModal({ viewerId, profile, activeTab, onTabChange, on
     useBodyScrollLock(true);
     const [query, setQuery] = useState("");
     const [sort, setSort] = useState<"RECENT" | "NAME">("RECENT");
-    const [rows, setRows] = useState<ConnectionUserDto[]>([]);
-    const [state, setState] = useState<LoadState>("idle");
-    const [error, setError] = useState("");
     const [confirmTarget, setConfirmTarget] = useState<{
         row: ConnectionUserDto;
         kind: "REMOVE_FOLLOWER" | "UNFOLLOW";
     } | null>(null);
     const [actionPending, setActionPending] = useState(false);
     const ownProfile = profile?.id === viewerId;
+    const { rows, state, error, load: loadConnections, changeRelationship, removeRelationship } = useProfileConnections({
+        profileId: profile?.id,
+        viewerId,
+        tab: activeTab,
+        query,
+        sort,
+    });
     const tabs: Array<{
         id: ConnectionTab;
         label: string;
@@ -330,23 +303,6 @@ export function ConnectionsModal({ viewerId, profile, activeTab, onTabChange, on
         { id: "FOLLOWING", label: "Following" },
         { id: "FRIENDS", label: "Friends" },
     ];
-    async function loadConnections() {
-        if (!profile)
-            return;
-        setState("loading");
-        setError("");
-        try {
-            const data = await apiGet<ConnectionsDto>(`/profiles/${encodeURIComponent(profile.id)}/connections?viewerId=${encodeURIComponent(viewerId)}&tab=${activeTab}&query=${encodeURIComponent(query)}&sort=${sort}&page=0&size=40`);
-            setRows(data.users ?? []);
-            setState("ready");
-        }
-        catch (err) {
-            setRows([]);
-            setState("error");
-            setError(err instanceof Error ? err.message : "Could not load connections");
-        }
-    }
-    useEffect(() => { void loadConnections(); }, [profile?.id, viewerId, activeTab, query, sort]);
     useEffect(() => {
         function closeOnEscape(event: KeyboardEvent) {
             if (event.key !== "Escape")
@@ -361,12 +317,7 @@ export function ConnectionsModal({ viewerId, profile, activeTab, onTabChange, on
     }, [confirmTarget, onClose]);
     async function handleRelationship(row: ConnectionUserDto) {
         try {
-            if (row.relationshipAction === "Follow" || row.relationshipAction === "Follow back") {
-                await apiSend("/user-followers/follow", "POST", { followerId: viewerId, followingId: row.userId });
-            }
-            else if (row.relationshipAction === "Following") {
-                await apiSend(`/user-followers/unfollow?followerId=${encodeURIComponent(viewerId)}&followingId=${encodeURIComponent(row.userId)}`, "DELETE");
-            }
+            await changeRelationship(row);
         }
         catch {
             window.dispatchEvent(new CustomEvent("app-toast", { detail: "Không thể cập nhật mối quan hệ. Vui lòng thử lại." }));
@@ -382,13 +333,12 @@ export function ConnectionsModal({ viewerId, profile, activeTab, onTabChange, on
         const followingId = kind === "REMOVE_FOLLOWER" ? profile.id : row.userId;
         setActionPending(true);
         try {
-            await apiSend(`/user-followers/unfollow?followerId=${encodeURIComponent(followerId)}&followingId=${encodeURIComponent(followingId)}`, "DELETE");
-            setRows((current) => current.filter((item) => item.userId !== row.userId));
+            await removeRelationship(followerId, followingId, row.userId);
             onRelationshipRemoved(activeTab, row);
             setConfirmTarget(null);
         }
-        catch (err) {
-            setError(err instanceof Error ? err.message : "Could not update this relationship");
+        catch {
+            // The connection flow retains the error for the modal's visible state.
         }
         finally {
             setActionPending(false);

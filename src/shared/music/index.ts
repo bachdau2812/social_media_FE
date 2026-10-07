@@ -1,5 +1,6 @@
 export { MusicSegmentEditor, type MusicSegmentEditorProps } from "./MusicSegmentEditor";
 export { MusicTrackBrowser, type MusicTrackBrowserProps } from "./MusicTrackBrowser";
+export { musicCatalogApi, type MusicPage } from "./music.api";
 export {
   DEFAULT_SEGMENT_SECONDS,
   MAX_SEGMENT_SECONDS,
@@ -14,6 +15,7 @@ export {
   useMusicSegmentPreview,
   type MusicPreviewTrack,
 } from "./useMusicSegmentPreview";
+export { useMusicFetchController, type MusicFetchControllerOptions } from "./useMusicFetchController";
 export {
   MUSIC_FETCH_RESULT_EVENT,
   isMusicDto,

@@ -53,17 +53,19 @@ beforeEach(() => {
   apiSend.mockResolvedValue({ trackId: unfetched.id, status: "STARTED" });
 });
 
-function renderStudio(callbacks: { onPublished?: () => void; onClose?: () => void } = {}) {
+function renderStudio(callbacks: { onPublished?: () => void; onClose?: () => void; onSaveDraft?: (request: any) => Promise<unknown>; mediaRatio?: string } = {}) {
   return render(<PostCreationStudio
     userId="user-1"
     onBack={vi.fn()}
     onClose={callbacks.onClose ?? vi.fn()}
     onDraftSaved={vi.fn()}
+    onSaveDraft={callbacks.onSaveDraft ?? (async () => {})}
     onPublished={callbacks.onPublished ?? vi.fn()}
     initialDraft={{
       id: "draft-1",
       draftType: "POST",
       payload: JSON.stringify({
+        mediaRatio: callbacks.mediaRatio,
         media: [{ id: "media-1", fileName: "photo.jpg", type: "IMAGE", secureUrl: "https://host/photo.jpg" }],
       }),
     }}
@@ -76,6 +78,12 @@ async function openMusicBrowser() {
 }
 
 describe("PostCreationStudio Spotify fetch", () => {
+  it("renders the creation preview using the stored width-to-height ratio", () => {
+    const { container } = renderStudio({ mediaRatio: "16:9" });
+
+    expect(container.querySelector<HTMLElement>(".preview-ratio-frame")?.style.aspectRatio).toBe("16 / 9");
+  });
+
   it("gates unfetched tracks, suppresses duplicate fetches, and enables a successful track", async () => {
     renderStudio();
     await openMusicBrowser();
@@ -133,5 +141,20 @@ describe("PostCreationStudio Spotify fetch", () => {
     fireEvent.click(screen.getByRole("button", { name: "Publish" }));
 
     await waitFor(() => expect(toastMessages).toContain("Backend unavailable"));
+  });
+
+  it("delegates draft persistence through its application adapter", async () => {
+    const onClose = vi.fn();
+    const onSaveDraft = vi.fn(async () => {});
+    renderStudio({ onClose, onSaveDraft });
+    await screen.findByRole("button", { name: /photo\.jpg/i });
+    fireEvent.click(screen.getByRole("button", { name: "Close create" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save draft" }));
+
+    await waitFor(() => expect(onSaveDraft).toHaveBeenCalledOnce());
+    expect(onSaveDraft).toHaveBeenCalledWith(expect.objectContaining({
+      id: "draft-1", draftType: "POST", mediaCount: 1, payload: expect.any(String),
+    }));
+    expect(onClose).toHaveBeenCalledOnce();
   });
 });

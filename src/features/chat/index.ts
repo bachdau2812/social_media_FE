@@ -1,4 +1,5 @@
 export { ConversationDetailsDrawer } from "./components/ConversationDetailsDrawer";
+export { chatApi } from "./api/chat.api";
 export { chatRealtime } from "./services/chatRealtime";
 export type { ChatRealtimeEvent } from "./services/chatRealtime";
 export { ChatAttachmentTray, ChatAudioPlayer, ChatImageMosaic, ChatMediaViewer, ChatVoiceComposerState } from "./components/ChatMediaExperience";

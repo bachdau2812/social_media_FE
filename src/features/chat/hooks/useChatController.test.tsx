@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "../../../shared/api";
 import type { ChatMessageDto, ConversationDto, CursorPageDto } from "../model/chat.dto";
 import type { ChatRealtimeEvent } from "../services/chatRealtime";
+import { chatSendJobs } from "../services/chatSendJobs";
 import type { ChatImageDraft } from "./useChatMediaComposer";
 import { useChatController } from "./useChatController";
 
@@ -13,12 +14,16 @@ const chatApi = vi.hoisted(() => ({
   conversations: vi.fn(),
   conversation: vi.fn(),
   messages: vi.fn(),
+  messagesAfter: vi.fn(),
   details: vi.fn(),
   send: vi.fn(),
 }));
 
 const chatRealtime = vi.hoisted(() => ({
   rememberRecipientCursor: vi.fn(),
+  rememberMemberCursor: vi.fn(),
+  clearRecipientMemberCursors: vi.fn(),
+  recipientCursor: vi.fn(() => ({ deliveredSeq: 0, readSeq: 0 })),
   subscribe: vi.fn<(userId: string, listener: (event: ChatRealtimeEvent) => void) => () => void>(() => vi.fn()),
   subscribeReconnect: vi.fn<(listener: () => void) => () => void>(() => vi.fn()),
   acknowledgeDelivered: vi.fn(),
@@ -103,13 +108,17 @@ function messagePage(conversationId: string): CursorPageDto<ChatMessageDto> {
 }
 
 beforeEach(() => {
+  chatSendJobs.clear();
   chatApi.conversations.mockReset();
   chatApi.conversation.mockReset();
   chatApi.messages.mockReset();
+  chatApi.messagesAfter.mockReset();
   chatApi.details.mockReset();
   chatApi.send.mockReset();
   chatApi.messageStates.mockReset();
   chatRealtime.publishLocalMessage.mockClear();
+  chatRealtime.acknowledgeDelivered.mockClear();
+  chatRealtime.acknowledgeRead.mockClear();
   chatRealtime.subscribe.mockClear();
   chatRealtime.subscribeReconnect.mockClear();
   uploadCloudinaryMedia.mockReset();
@@ -139,6 +148,20 @@ describe("useChatController message requests", () => {
   function membership(type: "MEMBER_REMOVED" | "MEMBER_ADDED", conversationId = "a"): ChatRealtimeEvent {
     return { type, eventId: type, conversationId, actorId: "admin", targetUserId: "viewer-1", recipientIds: ["viewer-1"] };
   }
+  it("loads the next inbox cursor while retaining conversations already loaded", async () => {
+    chatApi.conversations
+      .mockResolvedValueOnce({ items: [thread("first")], hasMore: true, nextCursor: "inbox-next" })
+      .mockResolvedValueOnce({ items: [thread("second")], hasMore: false, nextCursor: null });
+    const { result } = renderHook(() => useChatController("viewer-1", null));
+    await waitFor(() => expect(result.current.threadState).toBe("ready"));
+    expect(result.current.hasMoreThreads).toBe(true);
+
+    await act(async () => result.current.loadMoreThreads());
+
+    expect(chatApi.conversations.mock.calls[1].slice(0, 3)).toEqual(["viewer-1", "inbox-next", 100]);
+    expect(result.current.threads.map((item) => item.id)).toEqual(["first", "second"]);
+    expect(result.current.hasMoreThreads).toBe(false);
+  });
   it("purges removed history and ignores creations until a fresh rejoined snapshot arrives", async () => {
     chatApi.conversations.mockResolvedValue({ items: [thread("a")] });
     chatApi.messages.mockResolvedValue(messagePage("a"));
@@ -223,7 +246,7 @@ describe("useChatController message requests", () => {
     await act(async () => page.resolve(initial));
     expect(result.current.activeMessages.map((item) => item.messageSeq)).toEqual([5, 6]);
   });
-  it("fills a missing out-of-order creation without changing the newest summary or read cursor", async () => {
+  it("fills an out-of-order gap before advancing the visible read cursor", async () => {
     const initial = messagePage("a"); initial.items[0].messageSeq = 5;
     chatApi.conversations.mockResolvedValue({ items: [{ ...thread("a"), lastMessageSeq: 5 }] });
     chatApi.messages.mockResolvedValue(initial);
@@ -231,11 +254,45 @@ describe("useChatController message requests", () => {
     await waitFor(() => expect(result.current.messageState).toBe("ready"));
     act(() => result.current.setFocused(true));
     emit({ type: "MESSAGE_CREATED", eventId: "seven", conversationId: "a", actorId: "other", recipientIds: ["viewer-1"], message: { ...initial.items[0], clientMessageId: undefined, id: "seven", messageSeq: 7, content: "newest" } });
-    const before = result.current.threads, read = chatRealtime.acknowledgeRead.mock.calls.length;
+    const before = result.current.threads;
     emit({ type: "MESSAGE_CREATED", eventId: "six", conversationId: "a", actorId: "other", recipientIds: ["viewer-1"], message: { ...initial.items[0], clientMessageId: undefined, id: "six", messageSeq: 6, content: "middle" } });
     expect(result.current.activeMessages.map((item) => item.messageSeq)).toEqual([5, 6, 7]);
     expect(result.current.threads).toEqual(before);
-    expect(chatRealtime.acknowledgeRead).toHaveBeenCalledTimes(read);
+    expect(chatRealtime.acknowledgeRead).toHaveBeenCalledWith("a", 7);
+  });
+  it("backfills a live message sequence gap before acknowledging delivery", async () => {
+    const initial = messagePage("a"); initial.items[0].messageSeq = 5;
+    const gap = deferred<CursorPageDto<ChatMessageDto>>();
+    chatApi.conversations.mockResolvedValue({ items: [{ ...thread("a"), lastMessageSeq: 5 }] });
+    chatApi.messages.mockResolvedValue(initial);
+    chatApi.messagesAfter.mockReturnValue(gap.promise);
+    const { result } = renderHook(() => useChatController("viewer-1", { conversationId: "a" }));
+    await waitFor(() => expect(result.current.messageState).toBe("ready"));
+
+    emit({ type: "MESSAGE_CREATED", eventId: "seven", conversationId: "a", actorId: "other", recipientIds: ["viewer-1"], message: { ...initial.items[0], clientMessageId: undefined, id: "seven", messageSeq: 7, content: "seven" } });
+    await waitFor(() => expect(chatApi.messagesAfter).toHaveBeenCalledWith("a", "viewer-1", 5, 100));
+    expect(chatRealtime.acknowledgeDelivered).not.toHaveBeenCalledWith("a", 7);
+
+    const missing: ChatMessageDto = { ...initial.items[0], id: "six", messageSeq: 6, content: "six" };
+    await act(async () => gap.resolve({ items: [missing], hasMore: false, nextCursor: null }));
+    await waitFor(() => expect(result.current.activeMessages.map((message) => message.messageSeq)).toEqual([5, 6, 7]));
+    await waitFor(() => expect(chatRealtime.acknowledgeDelivered).toHaveBeenCalledWith("a", 7));
+  });
+  it("reloads the active message snapshot after a WebSocket reconnect", async () => {
+    const initial = messagePage("a"); initial.items[0].messageSeq = 5;
+    const recovered = messagePage("a"); recovered.items[0].messageSeq = 7;
+    chatApi.conversations.mockResolvedValue({ items: [{ ...thread("a"), lastMessageSeq: 7 }] });
+    chatApi.messages.mockResolvedValueOnce(initial).mockResolvedValueOnce(recovered);
+    const { result } = renderHook(() => useChatController("viewer-1", { conversationId: "a" }));
+    await waitFor(() => expect(result.current.messageState).toBe("ready"));
+
+    const reconnectCalls = chatRealtime.subscribeReconnect.mock.calls;
+    const reconnect = reconnectCalls[reconnectCalls.length - 1]?.[0];
+    expect(reconnect).toBeDefined();
+    await act(async () => reconnect?.());
+
+    await waitFor(() => expect(chatApi.messages).toHaveBeenCalledTimes(2));
+    expect(result.current.activeMessages[0].messageSeq).toBe(7);
   });
   it("does not insert pre-rejoin creation replays below the fresh server snapshot boundary", async () => {
     chatApi.conversations.mockResolvedValue({ items: [{ ...thread("a"), lastMessageSeq: 10 }] });
@@ -641,6 +698,8 @@ describe("useChatController message requests", () => {
 
     expect(result.current.sendError).toBeNull();
     expect(chatApi.send).toHaveBeenCalledTimes(2);
+    expect(chatApi.send.mock.calls[1][2].clientMessageId).toBe(chatApi.send.mock.calls[0][2].clientMessageId);
+    expect(uploadCloudinaryMedia).toHaveBeenCalledTimes(1);
     expect(mediaComposer.clearAudio).toHaveBeenCalledTimes(1);
     expect(result.current.activeMessages.some((message) => message.messageType === "AUDIO")).toBe(true);
   });
@@ -744,6 +803,8 @@ describe("useChatController message requests", () => {
     await act(async () => { await result.current.send(); });
 
     expect(chatApi.send.mock.calls.map(([, , request]) => request.messageType)).toEqual(["AUDIO", "TEXT", "TEXT"]);
+    expect(chatApi.send.mock.calls[2][2].clientMessageId).toBe(chatApi.send.mock.calls[1][2].clientMessageId);
+    expect(chatApi.send.mock.calls[2][2].replyToSeq).toBe(chatApi.send.mock.calls[1][2].replyToSeq);
     expect(uploadCloudinaryMedia).toHaveBeenCalledTimes(1);
     expect(mediaComposer.clearAudio).toHaveBeenCalledTimes(1);
     expect(result.current.sendError).toBeNull();
@@ -807,7 +868,8 @@ describe("useChatController message requests", () => {
     await act(async () => { await result.current.send(); });
 
     expect(chatApi.send.mock.calls.map(([, , request]) => request.messageType)).toEqual(["IMAGE", "AUDIO", "AUDIO"]);
-    expect(uploadCloudinaryMedia).toHaveBeenCalledTimes(3);
+    expect(chatApi.send.mock.calls[2][2].clientMessageId).toBe(chatApi.send.mock.calls[1][2].clientMessageId);
+    expect(uploadCloudinaryMedia).toHaveBeenCalledTimes(2);
     expect(mediaComposer.removeImage).toHaveBeenCalledTimes(1);
     expect(mediaComposer.clearAudio).toHaveBeenCalledTimes(1);
     expect(result.current.sendError).toBeNull();

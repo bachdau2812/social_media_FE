@@ -18,6 +18,9 @@ const controller = {
   threads: [],
   active: null,
   threadState: "ready",
+  hasMoreThreads: true,
+  loadingMoreThreads: false,
+  loadMoreThreads: vi.fn(),
   loadThreads: vi.fn(),
   setFocused: vi.fn(),
   openConversation: vi.fn(),
@@ -43,6 +46,12 @@ function openThreadList() {
 }
 
 describe("FloatingMessenger conversation creation", () => {
+  it("loads another inbox page through the shared chat controller", () => {
+    const container = openThreadList();
+    fireEvent.click(screen.getByRole("button", { name: "Tải thêm cuộc trò chuyện" }));
+    expect(controller.loadMoreThreads).toHaveBeenCalledOnce();
+    expect(container.querySelector(".floating-thread-list")).toBeInTheDocument();
+  });
   it("uses the same unavailable-target and retry flow as full chat", () => {
     const current = { ...controller, activeId: "missing", conversationState: "error", retryConversation: vi.fn(), closeConversation: vi.fn() };
     vi.mocked(useChatController).mockReturnValue(current as unknown as ReturnType<typeof useChatController>);

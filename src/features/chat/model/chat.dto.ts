@@ -42,6 +42,8 @@ export type ConversationDetailsDto = {
   members: ConversationMemberDto[];
 };
 
+export type ChatPresenceDto = { userId: string; online: boolean; lastActiveAt: string | null };
+
 export type ChatMediaMetadataDto = {
   url: string | null;
   publicId: string | null;

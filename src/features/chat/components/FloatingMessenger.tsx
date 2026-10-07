@@ -2,6 +2,7 @@ import { ChevronLeft, Expand, Image as ImageIcon, MessageCircle, PenLine, Search
 import { useEffect, useMemo, useState } from "react";
 import { ChatMediaViewer } from "./ChatMediaExperience";
 import { ConversationMediaDialog } from "./ConversationMediaBrowser";
+import { ChatPresenceStatus } from "./ChatPresenceStatus";
 import { ChatComposer } from "./ChatComposer";
 import { ChatMessageList } from "./ChatMessageList";
 import { NewConversationDialog } from "./NewConversationDialog";
@@ -70,6 +71,9 @@ export function FloatingMessenger({ userId, compactLauncher = false, onOpenFullC
           <span><strong>{thread.title}</strong><small>{thread.preview}</small></span>
           {thread.unreadCount > 0 && <em>{thread.unreadCount > 99 ? "99+" : thread.unreadCount}</em>}
         </button>)}
+        {controller.hasMoreThreads && <button type="button" className="chat-load-more" onClick={() => void controller.loadMoreThreads()} disabled={controller.loadingMoreThreads}>
+          {controller.loadingMoreThreads ? "Đang tải..." : controller.threadPageError ? "Thử tải lại cuộc trò chuyện" : "Tải thêm cuộc trò chuyện"}
+        </button>}
       </div>
     </section>;
   } else {
@@ -83,7 +87,9 @@ export function FloatingMessenger({ userId, compactLauncher = false, onOpenFullC
       <header className="floating-message-header">
         <button type="button" onClick={() => controller.closeConversation()} aria-label="Quay lại"><ChevronLeft size={19} /></button>
         <ThreadAvatar thread={controller.active} detail />
-        <div><strong>{controller.active.title}</strong><small>{controller.active.isDissolved ? "Nhóm đã giải tán" : "Cuộc trò chuyện"}</small></div>
+        <div><strong>{controller.active.title}</strong>{controller.active.type === "DIRECT"
+          ? <ChatPresenceStatus actorId={userId} conversationId={controller.active.id} conversationType={controller.active.type} />
+          : <small>{controller.active.isDissolved ? "Nhóm đã giải tán" : "Cuộc trò chuyện"}</small>}</div>
         <span className="floating-message-tools"><button type="button" onClick={() => setMediaOpen(true)} aria-label="Ảnh, video và đa phương tiện"><ImageIcon size={18} /></button><button type="button" onClick={() => onOpenFullChat(controller.activeId ?? undefined)} aria-label="Mở trang tin nhắn"><Expand size={18} /></button><button type="button" onClick={closePanel} aria-label="Đóng"><X size={18} /></button></span>
       </header>
       <PinnedMessagesBar key={`${userId}/${controller.activeId}`} controller={controller} />

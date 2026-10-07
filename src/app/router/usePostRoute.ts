@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type SetStateAction } from "react";
-import { apiGet } from "../../shared/api";
-import { postDetailsToPost, type Post, type PostDetailsDto } from "../../features/post";
+import { postDetailsToPost, postApi, type Post } from "../../features/post";
 
 /** URL-driven loading with cached seeds and cancellation for fast history navigation. */
 export function usePostRoute(postId: string | undefined, viewerId: string | undefined, seeds: Post[]) {
@@ -35,7 +34,7 @@ export function usePostRoute(postId: string | undefined, viewerId: string | unde
     setPost(null);
     let active = true;
     const controller = new AbortController();
-    apiGet<PostDetailsDto>(`/posts/${encodeURIComponent(postId)}?mediaType=POST`, { signal: controller.signal })
+    postApi.getRouteDetail(postId, controller.signal)
       .then((detail) => { if (active) setPost(postDetailsToPost(detail)); })
       .catch(() => { if (active) setErrorKey(key); });
     return () => { active = false; controller.abort(); };

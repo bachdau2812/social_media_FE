@@ -5,7 +5,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { apiGet, apiSend, uploadCloudinaryMedia } from "../../../shared/api";
 import type { Post } from "../model/post.types";
 import { reportFeedMusicVisibility } from "../model/feedMusicCoordinator";
-import { CommentRow, PostCard, PostDetail } from "./PostSurfaces";
+import { CommentRow } from "./CommentRow";
+import { PostDetail } from "./PostDetail";
+import { PostCard } from "./PostCard";
 
 const postMediaCss = readFileSync(
   resolve(process.cwd(), "src/features/post/styles/post-media.css"),
@@ -75,6 +77,21 @@ describe("Post video playback", () => {
     expect(postMediaCss).toMatch(
       /\.detail-media-content \.post-video-player\s*\{[^}]*display:\s*grid;[^}]*place-items:\s*center;/s,
     );
+  });
+
+  it("renders the feed media frame with the stored width-to-height ratio", () => {
+    const { container } = render(<PostCard
+      post={videoPost()}
+      index={1}
+      viewerId="viewer-1"
+      onOpen={vi.fn()}
+      onToggle={vi.fn()}
+      onEdit={vi.fn()}
+      onArchive={vi.fn(async () => undefined)}
+      onOpenProfile={vi.fn(async () => undefined)}
+    />);
+
+    expect(container.querySelector<HTMLElement>(".post-media-frame")?.style.aspectRatio).toBe("16 / 9");
   });
 
   it("autoplays the visible Feed video with original audio", async () => {

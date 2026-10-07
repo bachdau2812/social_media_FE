@@ -6,14 +6,8 @@ import { POST_MEDIA_RATIOS, type PostMediaRatio } from "../model/postMediaRatio"
 import { uploadCloudinaryMedia } from "../../../shared/api";
 import { postApi } from "../api/post.api";
 import { mergePostDetail } from "../model/post.mapper";
+import { buildPostUpdateRequest, uploadEditedPostMedia, type EditablePostMedia } from "../editing/postEditing";
 import "./post-edit-dialog.css";
-
-type EditableMedia = Post["media"][number] & {
-  originalIndex: number;
-  file?: File;
-  publicId?: string;
-  resourceType?: string;
-};
 
 export function PostEditDialog({ post, userId, onClose, onSaved }: {
   post: Post;
@@ -25,7 +19,7 @@ export function PostEditDialog({ post, userId, onClose, onSaved }: {
   const [caption, setCaption] = useState(post.caption);
   const [hashtags, setHashtags] = useState((post.hashtags ?? []).join(" "));
   const [mediaRatio, setMediaRatio] = useState<PostMediaRatio>(post.mediaRatio);
-  const [media, setMedia] = useState<EditableMedia[]>(post.media.map((item, index) => ({ ...item, originalIndex: index })));
+  const [media, setMedia] = useState<EditablePostMedia[]>(post.media.map((item, index) => ({ ...item, originalIndex: index })));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const dirty = useMemo(() => JSON.stringify({ caption, hashtags, mediaRatio, media }) !== JSON.stringify({
@@ -49,7 +43,7 @@ export function PostEditDialog({ post, userId, onClose, onSaved }: {
     if (!files?.length) return;
     const additions = Array.from(files)
       .filter((file) => file.type.startsWith("image/") || file.type.startsWith("video/"))
-      .map((file, index): EditableMedia => ({
+      .map((file, index): EditablePostMedia => ({
         id: `new-${crypto.randomUUID()}`,
         orderNumber: media.length + index + 1,
         type: file.type.startsWith("video/") ? "VIDEO" : "IMAGE",
@@ -69,37 +63,15 @@ export function PostEditDialog({ post, userId, onClose, onSaved }: {
     setSaving(true);
     setError("");
     try {
-      const uploadedMedia = await Promise.all(media.map(async (item) => {
-        if (!item.file) return item;
-        const uploaded = await uploadCloudinaryMedia(item.file);
-        return {
-          ...item,
-          publicId: uploaded.publicId,
-          resourceType: uploaded.resourceType,
-          url: uploaded.secureUrl,
-        };
-      }));
-      const updated = await postApi.update({
-        postId: post.id,
+      const uploadedMedia = await uploadEditedPostMedia(media, uploadCloudinaryMedia);
+      const updated = await postApi.update(buildPostUpdateRequest({
+        post,
         userId,
-        content: caption,
-        hashtag: hashtags.split(/[ ,]+/).map((tag) => tag.replace(/^#/, "")).filter(Boolean),
+        caption,
+        hashtags,
         mediaRatio,
-        musicId: post.music?.id ?? undefined,
-        musicStart: post.music?.segmentStart ?? undefined,
-        musicEnd: post.music?.segmentEnd ?? undefined,
-        items: uploadedMedia.map((item, index) => ({
-          itemId: item.file ? null : item.id,
-          orderNumber: index + 1,
-          secureUrl: item.file ? item.url : null,
-          publicId: item.file ? item.publicId : null,
-          resourceType: item.file ? item.resourceType : null,
-          caption: item.caption ?? null,
-          musicId: item.music?.id ?? null,
-          musicStart: item.music?.segmentStart ?? null,
-          musicEnd: item.music?.segmentEnd ?? null,
-        })),
-      });
+        media: uploadedMedia,
+      }));
       onSaved(mergePostDetail(post, updated));
       onClose();
     } catch (reason) {

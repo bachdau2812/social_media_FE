@@ -18,6 +18,9 @@ const controller = {
   activeId: null,
   threads: [],
   threadState: "ready",
+  hasMoreThreads: true,
+  loadingMoreThreads: false,
+  loadMoreThreads: vi.fn(),
   setFocused: vi.fn(),
   closeConversation: vi.fn(),
   openConversation: vi.fn(),
@@ -27,6 +30,14 @@ const controller = {
 
 beforeEach(() => {
   vi.mocked(useChatController).mockReturnValue(controller as unknown as ReturnType<typeof useChatController>);
+});
+
+it("loads another inbox page through the shared chat controller", () => {
+  const current = { ...controller, threads: [{ id: "room", title: "Room", preview: "Hello", unreadCount: 0 }] as ChatThread[] };
+  vi.mocked(useChatController).mockReturnValue(current as unknown as ReturnType<typeof useChatController>);
+  render(<ChatScreen userId="me" username="me" onOpenProfile={vi.fn()} onOpenStory={vi.fn()} />);
+  fireEvent.click(screen.getByRole("button", { name: "Tải thêm cuộc trò chuyện" }));
+  expect(current.loadMoreThreads).toHaveBeenCalledOnce();
 });
 
 afterEach(() => {

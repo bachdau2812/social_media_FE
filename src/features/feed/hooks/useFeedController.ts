@@ -1,9 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
-import { apiGet } from "../../../shared/api";
 import type { Post } from "../../post";
 import { isActiveStory, storyTrayToItem, type StoryItem } from "../../story";
-import type { HomeScreenPayload } from "../model/feed.dto";
+import { feedApi } from "../api/feed.api";
 import { feedEntryIdentity, feedItemToPost } from "../model/feed.mapper";
 
 export type FeedController = {
@@ -77,7 +76,7 @@ export function useFeedController(): FeedController {
     loadingMoreRef.current = false;
     setLoadingMore(false);
     try {
-      const home = await apiGet<HomeScreenPayload>(`/home?userId=${encodeURIComponent(userId)}&tab=${tab}&limit=20&page=0&mediaType=FEED`, { signal: controller.signal });
+      const home = await feedApi.getHomePage(userId, tab, 0, controller.signal);
       if (controller.signal.aborted || version !== requestVersion.current) return;
       updatePosts((home.feed?.items ?? []).map(feedItemToPost));
       setStories((home.storyTray ?? []).map(storyTrayToItem).filter((story) => isActiveStory(story)));
@@ -101,7 +100,7 @@ export function useFeedController(): FeedController {
     const controller = new AbortController();
     requestController.current = controller;
     try {
-      const home = await apiGet<HomeScreenPayload>(`/home?userId=${encodeURIComponent(userId)}&tab=${tab}&limit=20&page=${nextPage}&mediaType=FEED`, { signal: controller.signal });
+      const home = await feedApi.getHomePage(userId, tab, nextPage, controller.signal);
       if (controller.signal.aborted || version !== requestVersion.current) return;
       const existingIds = new Set(postsRef.current.map(feedEntryIdentity));
       const uniqueItems = (home.feed?.items ?? [])

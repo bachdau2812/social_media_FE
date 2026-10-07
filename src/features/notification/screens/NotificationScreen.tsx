@@ -1,26 +1,21 @@
 import { Bell, Bookmark, Check, Heart, Lock, MessageCircle, MoreHorizontal, Play, Share2, Type, Users, WifiOff } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+
 import { Avatar } from "../../../shared/components";
 import { formatRelativeTime } from "../../../shared/utils";
-import { notificationApi } from "../api/notification.api";
-import { refreshNotificationUnreadCount, setNotificationUnreadCount } from "../hooks/useNotificationUnreadCount";
-import { notificationCategory, normalizedNotificationAction, notificationToViewItem } from "../model/notification.mapper";
-import type { NotificationFilter, NotificationViewItem } from "../model/notification.types";
-import { resolveNotificationRoute, type AppDestination } from "../core";
+import { useNotificationInbox } from "../hooks/useNotificationInbox";
 
-type Status = "loading" | "ready" | "error";
+import { notificationCategory, normalizedNotificationAction } from "../model/notification.mapper";
+import type { NotificationFilter, NotificationViewItem } from "../model/notification.types";
+import type { AppDestination } from "../core";
+
+
 
 export function NotificationScreen({ userId, onNavigate }: {
   userId: string;
   onNavigate: (destination: AppDestination) => Promise<void> | void;
 }) {
-  const [filter, setFilter] = useState<NotificationFilter>("ALL");
-  const [rows, setRows] = useState<NotificationViewItem[]>([]);
-  const [status, setStatus] = useState<Status>("loading");
-  const [error, setError] = useState("");
-  const requestController = useRef<AbortController | null>(null);
-  const requestVersion = useRef(0);
-  const rowsRef = useRef<NotificationViewItem[]>([]);
+  const { filter, setFilter, rows, status, error, load, markAll, openNotification, handleAction } =
+    useNotificationInbox(userId, onNavigate);
   const filters: Array<{ id: NotificationFilter; label: string }> = [
     { id: "ALL", label: "Tất cả" },
     { id: "INTERACTIONS", label: "Tương tác" },
@@ -28,98 +23,6 @@ export function NotificationScreen({ userId, onNavigate }: {
     { id: "SYSTEM", label: "Hệ thống" },
   ];
 
-  useEffect(() => {
-    rowsRef.current = rows;
-  }, [rows]);
-
-  const load = useCallback(async (preserveRows = false) => {
-    requestController.current?.abort();
-    const controller = new AbortController();
-    const version = ++requestVersion.current;
-    const keepVisibleRows = preserveRows || rowsRef.current.length > 0;
-    requestController.current = controller;
-    if (!keepVisibleRows) {
-      setRows([]);
-      setStatus("loading");
-    }
-    setError("");
-    try {
-      const page = await notificationApi.list(userId, filter, 0, 50, controller.signal);
-      if (controller.signal.aborted || version !== requestVersion.current) return;
-      setRows((page.content ?? []).map(notificationToViewItem));
-      setStatus("ready");
-    } catch (reason) {
-      if (controller.signal.aborted || version !== requestVersion.current) return;
-      if (keepVisibleRows) {
-        setStatus("ready");
-        setError("Không thể làm mới thông báo. Dữ liệu đang hiển thị vẫn được giữ lại.");
-      } else {
-        setRows([]);
-        setStatus("error");
-        setError(reason instanceof Error ? reason.message : "Không thể tải thông báo");
-      }
-    }
-  }, [filter, userId]);
-
-  useEffect(() => { void load(false); }, [load]);
-  useEffect(() => () => requestController.current?.abort(), []);
-  useEffect(() => {
-    const refresh = () => void load(true);
-    window.addEventListener("notification-refresh", refresh);
-    return () => window.removeEventListener("notification-refresh", refresh);
-  }, [load]);
-
-  async function markAll() {
-    const previous = rows;
-    setRows((current) => current.map((item) => ({ ...item, status: "READ" })));
-    setError("");
-    try {
-      await notificationApi.markAllRead(userId);
-      setNotificationUnreadCount(0);
-    } catch {
-      setRows(previous);
-      setError("Không thể đánh dấu tất cả thông báo đã đọc. Vui lòng thử lại.");
-    }
-  }
-
-  async function markRead(item: NotificationViewItem) {
-    if (item.status === "READ") return;
-    setRows((current) => current.map((row) => row.id === item.id ? { ...row, status: "READ" } : row));
-    setError("");
-    try {
-      await notificationApi.markRead(item.id);
-      refreshNotificationUnreadCount();
-    } catch {
-      setRows((current) => current.map((row) => row.id === item.id ? { ...row, status: item.status } : row));
-      setError("Không thể đánh dấu thông báo đã đọc. Vui lòng thử lại.");
-    }
-  }
-
-  function destinationFor(item: NotificationViewItem) {
-    return resolveNotificationRoute({
-      id: item.id,
-      actionType: item.actionType,
-      actorId: item.actorId,
-      entityId: item.entityId,
-      entityType: item.entityType,
-      metadata: { ...(item.metadata ?? {}), ...(item.deepLink ? { deepLink: item.deepLink } : {}) },
-    });
-  }
-
-  async function openNotification(item: NotificationViewItem) {
-    await markRead(item);
-    const destination = destinationFor(item);
-    if (destination) await onNavigate(destination);
-  }
-
-  async function handleAction(item: NotificationViewItem) {
-    if (item.actionLabel === "Theo dõi lại" && item.actorId) {
-      await notificationApi.follow(userId, item.actorId);
-      await markRead(item);
-      return;
-    }
-    await openNotification(item);
-  }
 
   const groups = notificationGroups(rows);
   return <section className="screen notifications-screen">

@@ -1,40 +1,29 @@
 import { Archive, Check, ChevronLeft, ChevronRight, ImagePlus, Info, Music2, Pause, Play, Send, X } from "lucide-react";
 import { ChangeEvent, DragEvent, useEffect, useRef, useState } from "react";
-import { apiGet, apiSend, uploadCloudinaryMedia } from "../../../shared/api";
+import { uploadCloudinaryMedia } from "../../../shared/api";
 import { validateMediaFile } from "../../../shared/media";
 import {
-  MUSIC_FETCH_RESULT_EVENT,
   MusicSegmentEditor,
   MusicTrackBrowser,
   normalizeMusicSegment,
-  requestMusicFetch,
+  musicCatalogApi,
   type MusicDto,
-  type MusicFetchResult,
+  useMusicFetchController,
   useMusicSegmentPreview,
 } from "../../../shared/music";
 import { emitAppToast } from "../../../shared/notifications/appToast";
 import { useBodyScrollLock } from "../../../shared/overlays/useBodyScrollLock";
 import { DEFAULT_POST_MEDIA_RATIO, POST_MEDIA_RATIOS, postMediaRatioValue, type PostMediaRatio } from "../model/postMediaRatio";
+import { postApi } from "../api/post.api";
+import { buildCreatePostRequest, buildPostDraftRequest, uploadPostMedia, type MusicSelection, type PostCreationMedia } from "../creation/postCreation";
 
-type Page<T> = { content: T[]; pageNumber?: number; totalPages?: number };
 type DraftSummary = { id: string; draftType: string; thumbnailUrl?: string; mediaCount: number; captionPreview: string; updatedAt: string };
+type PostDraftSaveRequest = Omit<ReturnType<typeof buildPostDraftRequest>, "id"> & { id: string | null };
 type CreateStep = 1 | 2 | 3 | 4;
 type PublishStatus = "idle" | "uploading" | "processing" | "publishing" | "success" | "failure" | "draft";
-type MusicSelection = { id: string; title: string; artist: string; url: string; artwork: string; duration: number };
-type MediaItem = {
-  id: string;
-  fileName: string;
-  type: "IMAGE" | "VIDEO";
+type MediaItem = PostCreationMedia & {
   url: string;
-  file: File | null;
-  secureUrl?: string;
-  publicId?: string;
-  resourceType?: string;
   status: "ready" | "processing" | "failed";
-  itemCaption: string;
-  music: MusicSelection | null;
-  musicStart: number;
-  musicEnd: number;
 };
 
 type Props = {
@@ -42,11 +31,12 @@ type Props = {
   onBack: () => void;
   onClose: () => void;
   onDraftSaved: (draft: DraftSummary) => void;
+  onSaveDraft: (request: PostDraftSaveRequest) => Promise<unknown>;
   onPublished: () => void;
   initialDraft?: { id: string; draftType: string; payload?: string | null } | null;
 };
 
-export function PostCreationStudio({ userId, onBack, onClose, onDraftSaved, onPublished, initialDraft }: Props) {
+export function PostCreationStudio({ userId, onBack, onClose, onDraftSaved, onSaveDraft, onPublished, initialDraft }: Props) {
   useBodyScrollLock(true);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const {
@@ -67,12 +57,16 @@ export function PostCreationStudio({ userId, onBack, onClose, onDraftSaved, onPu
   const [sharedEnd, setSharedEnd] = useState(30);
   const [musicQuery, setMusicQuery] = useState("");
   const [tracks, setTracks] = useState<MusicDto[]>([]);
-  const [fetchingTrackIds, setFetchingTrackIds] = useState<Set<string>>(() => new Set());
   const [musicLoading, setMusicLoading] = useState(false);
   const [musicLoadingMore, setMusicLoadingMore] = useState(false);
   const [musicPage, setMusicPage] = useState(0);
   const [musicHasMore, setMusicHasMore] = useState(true);
   const musicRequestVersion = useRef(0);
+  const { fetchingTrackIds, fetchTrack } = useMusicFetchController({
+    previewingId,
+    stopPreview: stopMusicPreview,
+    onFetched: (music) => setTracks((current) => current.map((track) => track.id === music.id ? music : track)),
+  });
   const [mediaOrientation, setMediaOrientation] = useState<Record<string, "landscape" | "portrait">>({});
   const [caption, setCaption] = useState("");
   const [hashtags, setHashtags] = useState("");
@@ -133,7 +127,7 @@ export function PostCreationStudio({ userId, onBack, onClose, onDraftSaved, onPu
     setMusicPage(0);
     setMusicHasMore(true);
     setMusicLoading(true);
-    apiGet<Page<MusicDto>>(`/musics?page=0&size=10&keyword=${encodeURIComponent(musicQuery)}`, { signal: controller.signal })
+    musicCatalogApi.search(musicQuery, 0, 10, controller.signal)
       .then((page) => {
         if (!alive || requestVersion !== musicRequestVersion.current) return;
         setTracks(page.content ?? []);
@@ -145,49 +139,13 @@ export function PostCreationStudio({ userId, onBack, onClose, onDraftSaved, onPu
     return () => { alive = false; controller.abort(); };
   }, [musicQuery]);
 
-  useEffect(() => {
-    const handleMusicFetchResult = (event: Event) => {
-      const detail = (event as CustomEvent<MusicFetchResult>).detail;
-      if (!detail || (detail.kind !== "success" && detail.kind !== "failure")) return;
-      const trackId = detail.kind === "success" ? detail.music.id : detail.trackId;
-      setFetchingTrackIds((current) => {
-        if (!current.has(trackId)) return current;
-        const next = new Set(current);
-        next.delete(trackId);
-        return next;
-      });
-      if (previewingId === trackId) stopMusicPreview();
-      if (detail.kind === "success") {
-        setTracks((current) => current.map((track) => track.id === trackId ? detail.music : track));
-      }
-    };
-    window.addEventListener(MUSIC_FETCH_RESULT_EVENT, handleMusicFetchResult);
-    return () => window.removeEventListener(MUSIC_FETCH_RESULT_EVENT, handleMusicFetchResult);
-  }, [previewingId, stopMusicPreview]);
-
-  async function fetchTrack(track: MusicDto) {
-    if (track.fetched || fetchingTrackIds.has(track.id)) return;
-    setFetchingTrackIds((current) => new Set(current).add(track.id));
-    try {
-      await requestMusicFetch(track.id);
-      emitAppToast(`Đang tải bài hát ${track.displayName}...`);
-    } catch {
-      setFetchingTrackIds((current) => {
-        const next = new Set(current);
-        next.delete(track.id);
-        return next;
-      });
-      emitAppToast("Không thể bắt đầu tải bài hát.");
-    }
-  }
-
   async function loadMoreTracks() {
     if (musicLoading || musicLoadingMore || !musicHasMore) return;
     const requestVersion = musicRequestVersion.current;
     const nextPage = musicPage + 1;
     setMusicLoadingMore(true);
     try {
-      const page = await apiGet<Page<MusicDto>>(`/musics?page=${nextPage}&size=10&keyword=${encodeURIComponent(musicQuery)}`);
+      const page = await musicCatalogApi.search(musicQuery, nextPage, 10);
       if (requestVersion !== musicRequestVersion.current) return;
       setTracks((current) => {
         const existing = new Set(current.map((track) => track.id));
@@ -393,9 +351,7 @@ export function PostCreationStudio({ userId, onBack, onClose, onDraftSaved, onPu
 
   async function saveDraft() {
     setStatus("uploading");
-    const uploads = await Promise.all(media.map(async (item) => item.secureUrl
-      ? { secureUrl: item.secureUrl, publicId: item.publicId ?? "", resourceType: item.resourceType ?? item.type.toLowerCase() }
-      : uploadCloudinaryMedia(item.file as File)));
+    const uploads = await uploadPostMedia(media, uploadCloudinaryMedia);
     const draft = {
       id: initialDraft?.id ?? `draft_${Date.now()}`,
       draftType: "POST",
@@ -405,34 +361,9 @@ export function PostCreationStudio({ userId, onBack, onClose, onDraftSaved, onPu
     };
     onDraftSaved(draft);
     setStatus("draft");
-    await apiSend(`/me/${userId}/drafts`, "POST", {
+    await onSaveDraft({
+      ...buildPostDraftRequest({ userId, caption, hashtags, mediaRatio, sharedMusic, sharedStart, sharedEnd, media }, uploads),
       id: initialDraft?.id ?? null,
-      draftType: "POST",
-      thumbnailUrl: uploads[0]?.secureUrl ?? null,
-      captionPreview: draft.captionPreview,
-      mediaCount: media.length,
-      payload: JSON.stringify({
-        caption,
-        hashtags,
-        mediaRatio,
-        sharedMusic,
-        musicId: sharedMusic?.id ?? null,
-        musicStart: sharedMusic ? sharedStart : null,
-        musicEnd: sharedMusic ? sharedEnd : null,
-        media: media.map((item, index) => ({
-          id: item.id,
-          fileName: item.fileName,
-          type: item.type,
-          secureUrl: uploads[index]?.secureUrl,
-          publicId: uploads[index]?.publicId,
-          resourceType: uploads[index]?.resourceType,
-          itemCaption: item.itemCaption,
-          music: item.music,
-          musicId: sharedMusic || item.type === "VIDEO" ? null : item.music?.id ?? null,
-          musicStart: sharedMusic || item.type === "VIDEO" || !item.music ? null : item.musicStart,
-          musicEnd: sharedMusic || item.type === "VIDEO" || !item.music ? null : item.musicEnd
-        }))
-      })
     }).catch(() => setStatus("failure"));
   }
 
@@ -440,28 +371,12 @@ export function PostCreationStudio({ userId, onBack, onClose, onDraftSaved, onPu
     if (!ready) return;
     setStatus("publishing");
     try {
-      const uploads = await Promise.all(media.map((item) => item.secureUrl
-        ? { secureUrl: item.secureUrl, publicId: item.publicId ?? "", resourceType: item.resourceType ?? item.type.toLowerCase() }
-        : uploadCloudinaryMedia(item.file as File)));
-      const response = await apiSend<{ postId: string; message?: string }>("/posts", "POST", {
-        userId,
-        content: caption,
-        hashtags: hashtags.split(/[ ,]+/).filter(Boolean).map((tag) => tag.replace(/^#/, "")),
-        mediaRatio,
-        musicId: sharedMusic?.id ?? null,
-        musicStart: sharedMusic ? sharedStart : null,
-        musicEnd: sharedMusic ? sharedEnd : null,
-        items: media.map((item, index) => ({
-          orderNumber: index + 1,
-          secureUrl: uploads[index].secureUrl,
-          publicId: uploads[index].publicId,
-          resourceType: uploads[index].resourceType,
-          caption: item.itemCaption || null,
-          musicId: sharedMusic || item.type === "VIDEO" ? null : item.music?.id ?? null,
-          musicStart: sharedMusic || item.type === "VIDEO" || !item.music ? null : item.musicStart,
-          musicEnd: sharedMusic || item.type === "VIDEO" || !item.music ? null : item.musicEnd
-        }))
-      });
+      const uploads = await uploadPostMedia(media, uploadCloudinaryMedia);
+      const request = buildCreatePostRequest(
+        { userId, caption, hashtags, mediaRatio, sharedMusic, sharedStart, sharedEnd, media },
+        uploads,
+      );
+      const response = await postApi.create(request);
       setStatus("success");
       stopPreview();
       emitAppToast(response.message || "Bài viết đang được xử lý và sẽ sớm hiển thị.");

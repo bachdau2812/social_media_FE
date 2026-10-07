@@ -1,9 +1,9 @@
 import { Archive, Bookmark, FileEdit, Image, RefreshCw, Trash2, Undo2 } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { nextScreenState, useScreenLocation } from "../../../app/router/ScreenLocation";
 import { libraryApi } from "../api/library.api";
-import type { ArchiveItem, ContentDraft, SavedPost, StoryArchiveItem } from "../model/library.types";
+import { toDraftResumeIntent, type ArchiveItem, type ContentDraft, type DraftResumeIntent, type SavedPost, type StoryArchiveItem } from "../model/library.types";
 import "./library-screen.css";
 
 type Tab = "SAVED" | "DRAFTS" | "ARCHIVE";
@@ -11,7 +11,7 @@ type Props = {
   userId: string;
   onOpenPost: (postId: string) => void;
   onOpenStory: (storyId: string) => void;
-  onResumeDraft: (draft: ContentDraft) => void;
+  onResumeDraft: (intent: DraftResumeIntent) => void;
 };
 
 export function LibraryScreen({ userId, onOpenPost, onOpenStory, onResumeDraft }: Props) {
@@ -31,27 +31,40 @@ export function LibraryScreen({ userId, onOpenPost, onOpenStory, onResumeDraft }
   const [archive, setArchive] = useState<ArchiveItem[]>([]);
   const [storyArchive, setStoryArchive] = useState<StoryArchiveItem[]>([]);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
+  const requestRef = useRef<AbortController | null>(null);
 
   const load = useCallback(async () => {
+    requestRef.current?.abort();
+    const controller = new AbortController();
+    requestRef.current = controller;
     setStatus("loading");
     try {
       const [savedPage, nextDrafts, nextArchive, nextStoryArchive] = await Promise.all([
-        libraryApi.saved(userId),
-        libraryApi.drafts(userId),
-        libraryApi.archive(userId, "POST"),
-        libraryApi.storyArchive(userId),
+        libraryApi.saved(userId, 0, 30, controller.signal),
+        libraryApi.drafts(userId, controller.signal),
+        libraryApi.archive(userId, "POST", controller.signal),
+        libraryApi.storyArchive(userId, 0, 100, controller.signal),
       ]);
+      if (controller.signal.aborted) return;
       setSaved(savedPage.content ?? []);
       setDrafts(nextDrafts ?? []);
       setArchive(nextArchive ?? []);
       setStoryArchive(nextStoryArchive.content ?? []);
       setStatus("ready");
     } catch {
-      setStatus("error");
+      if (!controller.signal.aborted) setStatus("error");
+    } finally {
+      if (requestRef.current === controller) requestRef.current = null;
     }
   }, [userId]);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    void load();
+    return () => {
+      requestRef.current?.abort();
+      requestRef.current = null;
+    };
+  }, [load]);
 
   async function removeSaved(item: SavedPost) {
     await libraryApi.removeSaved(userId, item.postId);
@@ -82,7 +95,7 @@ export function LibraryScreen({ userId, onOpenPost, onOpenStory, onResumeDraft }
     {status === "loading" && <div className="feature-library-grid loading">{Array.from({ length: 6 }, (_, index) => <span key={index} />)}</div>}
     {status === "error" && <LibraryState title="Không thể tải thư viện" action="Thử lại" onAction={() => void load()} />}
     {status === "ready" && tab === "SAVED" && (saved.length ? <div className="feature-library-grid">{saved.map((item) => <article key={item.id}><button className="library-preview placeholder" onClick={() => onOpenPost(item.postId)}><Image size={26} /><small>Bài viết</small></button><div><strong>{item.postId.slice(0, 12)}</strong><button onClick={() => void removeSaved(item)} aria-label="Bỏ lưu"><Trash2 size={17} /></button></div></article>)}</div> : <LibraryState title="Chưa có bài viết đã lưu" />)}
-    {status === "ready" && tab === "DRAFTS" && (drafts.length ? <div className="feature-library-grid">{drafts.map((item) => <article key={item.id}><button className="library-preview" onClick={() => onResumeDraft(item)}>{item.thumbnailUrl ? <img src={item.thumbnailUrl} alt="" /> : <FileEdit size={26} />}<small>{item.draftType}</small></button><div><strong>{item.captionPreview || "Bản nháp chưa đặt tên"}</strong><button onClick={() => void removeDraft(item)} aria-label="Xóa bản nháp"><Trash2 size={17} /></button></div></article>)}</div> : <LibraryState title="Chưa có bản nháp" />)}
+    {status === "ready" && tab === "DRAFTS" && (drafts.length ? <div className="feature-library-grid">{drafts.map((item) => <article key={item.id}><button className="library-preview" onClick={() => onResumeDraft(toDraftResumeIntent(item))}>{item.thumbnailUrl ? <img src={item.thumbnailUrl} alt="" /> : <FileEdit size={26} />}<small>{item.draftType}</small></button><div><strong>{item.captionPreview || "Bản nháp chưa đặt tên"}</strong><button onClick={() => void removeDraft(item)} aria-label="Xóa bản nháp"><Trash2 size={17} /></button></div></article>)}</div> : <LibraryState title="Chưa có bản nháp" />)}
     {status === "ready" && tab === "ARCHIVE" && <><div className="feature-library-filter"><button className={archiveType === "POST" ? "active" : ""} onClick={() => setArchiveType("POST")}>Bài viết</button><button className={archiveType === "STORY" ? "active" : ""} onClick={() => setArchiveType("STORY")}>Story</button></div>{archiveType === "POST" ? (archiveRows.length ? <div className="feature-library-grid">{archiveRows.map((item) => <article key={item.id}><button className="library-preview" onClick={() => onOpenPost(item.contentId)}>{item.thumbnailUrl ? <img src={item.thumbnailUrl} alt="" /> : <Archive size={26} />}<small>Bài viết</small></button><div><strong>{item.captionPreview || item.contentId.slice(0, 12)}</strong><span><button onClick={() => void restore(item)} aria-label="Khôi phục"><Undo2 size={17} /></button><button onClick={() => void removeArchive(item)} aria-label="Xóa vĩnh viễn"><Trash2 size={17} /></button></span></div></article>)}</div> : <LibraryState title="Chưa có bài viết lưu trữ" />) : (storyArchive.length ? <div className="feature-library-grid story-archive-grid">{storyArchive.map((item) => <article key={item.id}><button className="library-preview" onClick={() => onOpenStory(item.id)}>{item.mediaUrl ? (item.mediaType?.toUpperCase().includes("VIDEO") ? <video src={item.mediaUrl} muted preload="metadata" /> : <img src={item.mediaUrl} alt="" />) : <Archive size={26} />}<small>Story</small></button><div><strong>{item.createdAt ? new Date(item.createdAt).toLocaleDateString("vi-VN") : item.id.slice(0, 12)}</strong></div></article>)}</div> : <LibraryState title="Chưa có Story lưu trữ" />)}</>}
   </section>;
 }

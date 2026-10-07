@@ -3,7 +3,8 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { apiGet, apiSend } from "../../../shared/api";
 import { PostInteractionProvider } from "../hooks/PostInteractionProvider";
 import type { Post } from "../model/post.types";
-import { PostCard, PostDetail } from "./PostSurfaces";
+import { PostCard } from "./PostCard";
+import { PostDetail } from "./PostDetail";
 import { ChatMediaViewer } from "../../chat/components/ChatMediaExperience";
 
 vi.mock("../../../shared/api", async (original) => ({

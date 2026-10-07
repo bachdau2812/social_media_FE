@@ -3,8 +3,10 @@ export type { ProfileRelationship } from "./components/ProfileRelationshipAction
 export { SimilarUsersSection } from "./components/SimilarUsersSection";
 export type { SimilarUser } from "./components/SimilarUsersSection";
 export { ConnectionsModal, ProfileScreen } from "./screens/ProfileScreen";
-export type { ConnectionTab, ConnectionUserDto } from "./screens/ProfileScreen";
+export type { ConnectionTab, ConnectionUserDto } from "./api/profile.api";
 export { profileApi } from "./api/profile.api";
 export { profileToIdentity, profileToView } from "./model/profile.mapper";
 export type * from "./model/profile.dto";
 export type * from "./model/profile.types";
+export { useProfileController } from "./hooks/useProfileController";
+export { applyConnectionRemoval } from "./model/profileConnections";

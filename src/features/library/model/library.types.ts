@@ -17,6 +17,16 @@ export type ContentDraft = {
   updatedAt: string;
 };
 
+export type DraftResumeIntent =
+  | { kind: "POST"; draft: ContentDraft & { draftType: "POST" } }
+  | { kind: "STORY"; draft: ContentDraft & { draftType: "STORY" } };
+
+export function toDraftResumeIntent(draft: ContentDraft): DraftResumeIntent {
+  return draft.draftType === "POST"
+    ? { kind: "POST", draft: draft as ContentDraft & { draftType: "POST" } }
+    : { kind: "STORY", draft: draft as ContentDraft & { draftType: "STORY" } };
+}
+
 export type ArchiveItem = {
   id: string;
   userId: string;

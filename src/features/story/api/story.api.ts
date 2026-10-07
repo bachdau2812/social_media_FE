@@ -7,7 +7,22 @@ export type StoryReplyResponseDto = {
   messageSeq: number;
 };
 
+export type StoryCreateRequestDto = {
+  userId: string;
+  mediaUrl: string;
+  musicId: string | null;
+  musicUrl: string | null;
+  musicStart: number | null;
+  musicEnd: number | null;
+  publicationId: string;
+  publicationOrder: number;
+  publicationItemCount: number;
+};
+
 export const storyApi = {
+  create(request: StoryCreateRequestDto) {
+    return apiSend<unknown>("/profile-media/stories", "POST", request);
+  },
   archive(ownerId: string, page = 0, size = 60) {
     return apiGet<Page<StoryArchiveDto>>(`/profile-media/${encodeURIComponent(ownerId)}/stories?page=${page}&size=${size}&mediaType=STORY`);
   },

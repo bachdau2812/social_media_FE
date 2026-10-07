@@ -5,18 +5,19 @@ import type { ChatMessageDto, ConversationDto } from "../model/chat.dto";
 import type { ChatRealtimeEvent } from "../services/chatRealtime";
 import { ChatScreen } from "../screens/ChatScreen";
 import { FloatingMessenger } from "./FloatingMessenger";
+import { ApiError } from "../../../shared/api";
 
 const listeners = vi.hoisted(() => new Set<(event: ChatRealtimeEvent) => void>());
 const reconnects = vi.hoisted(() => new Set<() => void>());
-const api = vi.hoisted(() => ({ conversations: vi.fn(), conversation: vi.fn(), messages: vi.fn(), pins: vi.fn(), pin: vi.fn(), unpin: vi.fn(), recall: vi.fn(), messageStates: vi.fn(), reactionStates: vi.fn(), suggestions: vi.fn(), direct: vi.fn(), forward: vi.fn(), group: vi.fn() }));
+const api = vi.hoisted(() => ({ conversations: vi.fn(), conversation: vi.fn(), details: vi.fn(), presence: vi.fn(), messages: vi.fn(), pins: vi.fn(), pin: vi.fn(), unpin: vi.fn(), recall: vi.fn(), messageStates: vi.fn(), reactionStates: vi.fn(), suggestions: vi.fn(), direct: vi.fn(), forward: vi.fn(), group: vi.fn(), send: vi.fn() }));
 const realtime = vi.hoisted(() => ({ subscribe: vi.fn((_user: string, listener: (event: ChatRealtimeEvent) => void) => { listeners.add(listener); return () => { listeners.delete(listener); }; }),
   subscribeReconnect: vi.fn((listener: () => void) => { reconnects.add(listener); return () => { reconnects.delete(listener); }; }),
-  rememberRecipientCursor: vi.fn(), acknowledgeDelivered: vi.fn(), acknowledgeRead: vi.fn(), outgoingStatus: vi.fn(() => "sent"), publishLocalMessage: vi.fn() }));
+  rememberRecipientCursor: vi.fn(), clearRecipientMemberCursors: vi.fn(), acknowledgeDelivered: vi.fn(), acknowledgeRead: vi.fn(), outgoingStatus: vi.fn(() => "sent"), publishLocalMessage: vi.fn() }));
 vi.mock("../api/chat.api", () => ({ chatApi: api }));
 vi.mock("../services/chatRealtime", () => ({ chatRealtime: realtime }));
 vi.mock("../hooks/useChatMediaComposer", async (importOriginal) => ({
   ...await importOriginal<typeof import("../hooks/useChatMediaComposer")>(),
-  useChatMediaComposer: () => ({ images: [], audioAttachment: null, recording: false, recordingElapsed: 0, error: "" }),
+  useChatMediaComposer: () => ({ images: [], audioAttachment: null, recording: false, recordingElapsed: 0, error: "", clearImages: vi.fn() }),
 }));
 const conversation: ConversationDto = { id: "c", type: "DIRECT", title: "An", isDissolved: false, avatarUrl: null, lastMessageId: "m", lastMessageSeq: 5, lastMessageAt: null, lastMessageSenderId: "me", lastMessageType: "TEXT", lastMessagePreview: "secret-message", currentUserRole: "USER", unreadCount: 4, recipientDeliveredSeq: 0, recipientReadSeq: 0, createdAt: null };
 const message: ChatMessageDto = { id: "m", conversationId: "c", messageSeq: 5, clientMessageId: null, senderId: "me", senderDisplayName: "Me", senderAvatarUrl: null, messageType: "TEXT", content: "secret-message", metadata: null, reply: null, replyToSeq: null, createdAt: "2026-10-06T08:00:00Z", editedAt: null, deleted: false, reactions: [], reactionVersion: 0, myReaction: null, isReact: false, likeCount: 0 };
@@ -26,6 +27,8 @@ beforeEach(() => {
   vi.clearAllMocks(); Object.values(api).forEach((mock) => mock.mockReset()); listeners.clear(); reconnects.clear();
   api.conversations.mockResolvedValue({ items: [conversation], hasMore: false, nextCursor: null });
   api.conversation.mockRejectedValue(new Error("membership removed"));
+  api.details.mockResolvedValue({ members: [{ userId: "me" }, { userId: "peer" }] });
+  api.presence.mockResolvedValue({ userId: "peer", online: false, lastActiveAt: null });
   api.messages.mockResolvedValue({ items: [message], hasMore: false, nextCursor: null });
   api.pins.mockResolvedValue({ version: 0, canManage: true, items: [] });
   api.recall.mockResolvedValue({ ...message, deleted: true });
@@ -37,6 +40,30 @@ function mount(surface: "full" | "mini") {
     : <FloatingMessenger userId="me" openConversationRequest={{ conversationId: "c", nonce: 1 }} onOpenFullChat={vi.fn()} onOpenStory={vi.fn()} />}</StrictMode>);
 }
 describe.each(["full", "mini"] as const)("%s message action parity", (surface) => {
+  it("retains the draft after send failure 1323 and retries the same request once", async () => {
+    const content = `retry-1323-${surface}`;
+    api.send.mockRejectedValueOnce(new ApiError("POST", "/chat/conversations/c/messages", 500,
+      { code: 1323, backendMessage: "Create chat message failed" }))
+      .mockResolvedValueOnce({ ...message, id: "accepted", messageSeq: 6, content });
+    mount(surface);
+    await screen.findByText("secret-message");
+    const composer = screen.getByRole("textbox", { name: "Nội dung tin nhắn" });
+    fireEvent.change(composer, { target: { value: content } });
+    fireEvent.click(screen.getByRole("button", { name: "Gửi tin nhắn" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Máy chủ đang gặp sự cố");
+    expect(composer).toHaveValue(content);
+    const firstRequest = api.send.mock.calls[0][2];
+    expect(firstRequest).toMatchObject({ messageType: "TEXT", content, recipientId: "peer" });
+    expect(firstRequest.clientMessageId).toMatch(/^[a-f0-9-]{36}$/i);
+    expect(screen.queryByText(content, { selector: "p.emoji-text" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Gửi tin nhắn" }));
+    await waitFor(() => expect(api.send).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(composer).toHaveValue(""));
+    expect(api.send.mock.calls[1][2]).toEqual(firstRequest);
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.getAllByText(content, { selector: "p.emoji-text" })).toHaveLength(1);
+    expect(realtime.publishLocalMessage).toHaveBeenCalledTimes(1);
+  });
   it("redacts an unloaded recalled source on reconnect and rejects a stale quote replay", async () => {
     const reply: ChatMessageDto = { ...message, id: "reply", messageSeq: 100, content: "reply-body", replyToSeq: 1, reply: { messageSeq: 1, content: "unloaded-private-quote", deleted: false, senderId: "me", senderDisplayName: "Me", messageType: "TEXT", metadata: null } };
     api.messages.mockResolvedValue({ items: [reply], hasMore: false, nextCursor: null });

@@ -62,6 +62,7 @@ describe("feedItemToPost", () => {
 
     expect(post.feedEntryId).toBe("post-1");
     expect(post.feedActivity).toBeUndefined();
+    expect(post.mediaRatio).toBe("4:3");
   });
 
   it("preserves additive recommendation metadata without changing the Post rendering model", () => {

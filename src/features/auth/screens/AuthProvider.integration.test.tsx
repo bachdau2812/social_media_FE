@@ -12,12 +12,12 @@ afterEach(() => {
 });
 
 function AuthGate() {
-  const { session, status, error, login } = useAuth();
-  if (status === "loading") return <BootScreen />;
+  const { session, status, error, recoverableError, login, restoreSession } = useAuth();
+  if (status === "loading") return <><BootScreen /><button onClick={() => void login("alice", "secret")}>Login during restore</button></>;
   if (!session) {
-    return <AuthFlow errorText={error} loading={false} onLogin={async (username, password) => { await login(username, password); }} />;
+    return <><output data-testid="auth-status">{status}</output><button onClick={() => void restoreSession()}>Retry restore</button><AuthFlow errorText={error} errorIsRecoverable={recoverableError} loading={false} onLogin={async (username, password) => { await login(username, password); }} /></>;
   }
-  return <p>Authenticated</p>;
+  return <><output data-testid="auth-status">{status}</output><p>Authenticated: {session.username}</p></>;
 }
 
 describe("AuthProvider and AuthFlow integration", () => {
@@ -56,5 +56,51 @@ describe("AuthProvider and AuthFlow integration", () => {
 
     await user.type(screen.getByLabelText("Email hoặc tên đăng nhập"), "2");
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("keeps a failed session restore recoverable instead of treating a server error as anonymous", async () => {
+    vi.stubGlobal("fetch", vi.fn(() => Promise.resolve(new Response(JSON.stringify({ message: "unavailable" }), {
+      status: 503,
+      headers: { "Content-Type": "application/json" },
+    }))));
+    render(<LocaleProvider><AuthProvider><AuthGate /></AuthProvider></LocaleProvider>);
+
+    expect(await screen.findByTestId("auth-status")).toHaveTextContent("error");
+    expect(screen.getByRole("heading", { name: "Đăng nhập" })).toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveTextContent("Máy chủ đang gặp sự cố");
+  });
+
+  it("does not let an old restore response overwrite a newer login", async () => {
+    let resolveRestore!: (response: Response) => void;
+    const restoreResponse = new Promise<Response>((resolve) => { resolveRestore = resolve; });
+    let restoreCount = 0;
+    vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL) => {
+      if (String(input).endsWith("/auth/session")) {
+        restoreCount += 1;
+        if (restoreCount === 1) return Promise.resolve(new Response(JSON.stringify({ message: "anonymous" }), {
+          status: 401,
+          headers: { "Content-Type": "application/json" },
+        }));
+        return restoreResponse;
+      }
+      return Promise.resolve(new Response(JSON.stringify({ userId: "login-user", username: "new-session" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }));
+    }));
+    const user = userEvent.setup();
+    render(<LocaleProvider><AuthProvider><AuthGate /></AuthProvider></LocaleProvider>);
+
+    await screen.findByRole("heading", { name: "Đăng nhập" });
+    await user.click(screen.getByRole("button", { name: "Retry restore" }));
+    await user.click(await screen.findByRole("button", { name: "Login during restore" }));
+    expect(await screen.findByText("Authenticated: new-session")).toBeInTheDocument();
+
+    resolveRestore(new Response(JSON.stringify({ userId: "old-user", username: "stale-session" }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    }));
+    await waitFor(() => expect(screen.getByText("Authenticated: new-session")).toBeInTheDocument());
+    expect(screen.queryByText("Authenticated: stale-session")).not.toBeInTheDocument();
   });
 });

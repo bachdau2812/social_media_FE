@@ -1,5 +1,11 @@
-import { legacyPostMedia, musicDtoToPostMusic, normalizePostHashtags, postItemDtosToMedia, type Post } from "../../post";
-import { normalizePostMediaRatio } from "../../post/model/postMediaRatio";
+import {
+  legacyPostMedia,
+  musicDtoToPostMusic,
+  normalizePostHashtags,
+  normalizePostMediaRatio,
+  postItemDtosToMedia,
+  type Post,
+} from "../../post";
 import type { FeedItemDto } from "./feed.dto";
 
 function optionalText(value: string | null): string | undefined {

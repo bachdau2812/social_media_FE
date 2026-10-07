@@ -13,15 +13,19 @@ const fixtures = vi.hoisted(() => ({
   login: vi.fn(async () => {}), logout: vi.fn(async () => {}), toast: vi.fn(),
   feedLoad: vi.fn(async () => {}), pending: vi.fn(() => null),
   feedInvalidate: vi.fn(),
+  profileLoad: vi.fn(async (id: string) => ({ id, posts: [], reposts: [] })),
+  viewportMode: "desktop" as "desktop" | "mobile",
+  chatDirect: vi.fn(async () => ({ id: "conversation-1" })),
   stories: [{ id: "story-1", userId: "author-1", name: "Author", username: "author", avatarUrl: "", totalItems: 2, seenItems: 0, state: "unseen" }, { id: "story-2", userId: "author-1", name: "Author", username: "author", avatarUrl: "", totalItems: 2, seenItems: 0, state: "unseen" }],
 }));
 vi.mock("../shared/api", async (original) => ({ ...await original<typeof import("../shared/api")>(), apiGet: vi.fn(), apiSend: vi.fn(async () => ({})) }));
 vi.mock("./providers/AuthProvider", () => ({ useAuth: () => ({ session: fixtures.session, status: "ready", login: fixtures.login, logout: fixtures.logout }) }));
 vi.mock("./providers/ToastProvider", () => ({ useToast: () => ({ showToast: fixtures.toast }) }));
-vi.mock("../shared/hooks/useViewportMode", () => ({ useViewportMode: () => "desktop" }));
+vi.mock("../shared/hooks/useViewportMode", () => ({ useViewportMode: () => fixtures.viewportMode }));
 vi.mock("./bootstrap/mediaController", () => ({ installPageVisibilityMediaController: () => () => {} }));
+vi.mock("./composition/useAccountRealtime", () => ({ useAccountRealtime: () => {} }));
 vi.mock("../features/post", async (original) => ({
-  ...await original<typeof import("../features/post")>(), usePostEventStream: () => {},
+  ...await original<typeof import("../features/post")>(),
   PostDetail: ({ post, targetCommentId, onClose }: any) => <div role="dialog">Post {post.id} Comment {targetCommentId}<button onClick={onClose}>Close post</button></div>,
   PostCreationStudio: () => <div>Create post</div>, PostEditDialog: () => null,
 }));
@@ -30,11 +34,12 @@ vi.mock("../features/feed", () => ({
   HomeScreen: ({ onSelectPost, onOpenProfile, onSelectStory }: any) => <div>Home<button onClick={() => onSelectPost(fixtures.post)}>Open post</button><button onClick={() => onOpenProfile("author-1")}>Open author</button><button onClick={() => onSelectStory(fixtures.stories[0])}>Open story</button></div>,
 }));
 vi.mock("../features/profile", () => ({
-  profileApi: { getSummary: vi.fn() }, profileToView: (value: any) => value, profileToIdentity: (value: any) => value,
-  ProfileScreen: ({ profile, onSelectPost }: any) => <div>Profile {profile?.id}<button onClick={() => onSelectPost(fixtures.post)}>Profile post</button></div>, ConnectionsModal: () => null,
+  profileApi: { getSummary: vi.fn() }, useProfileController: () => ({ loadSummary: fixtures.profileLoad }), profileToIdentity: (value: any) => value,
+  ProfileScreen: ({ profile, onSelectPost, onMessage }: any) => <div>Profile {profile?.id}<button onClick={() => onSelectPost(fixtures.post)}>Profile post</button><button onClick={() => onMessage("author-1")}>Message author</button></div>, ConnectionsModal: () => null,
 }));
 vi.mock("../features/chat", () => ({
-  useChatUnreadCount: () => 0, FloatingMessenger: () => <div>Mini chat</div>,
+  chatApi: { direct: fixtures.chatDirect }, useChatUnreadCount: () => 0,
+  FloatingMessenger: ({ openConversationRequest }: any) => <div>Mini chat {openConversationRequest?.conversationId || ""}</div>,
   ChatScreen: ({ initialTarget }: any) => <div>Chat {initialTarget?.conversationId || "inbox"}</div>,
 }));
 vi.mock("../features/notification", async (original) => ({
@@ -63,10 +68,12 @@ function Application({ entry = "/" }: { entry?: string }) {
 beforeEach(() => {
   vi.clearAllMocks();
   fixtures.session = { userId: "viewer-1", username: "viewer" };
+  fixtures.viewportMode = "desktop";
   fixtures.pending.mockReturnValue(null);
   sessionStorage.clear();
   vi.spyOn(window, "scrollTo").mockImplementation(() => {});
-  vi.mocked(profileApi.getSummary).mockImplementation(async (id) => ({ id, posts: [], reposts: [] } as any));
+  fixtures.profileLoad.mockImplementation(async (id) => ({ id, posts: [], reposts: [] }));
+  vi.mocked(profileApi.getSummary).mockImplementation(async (id) => ({ user: { userId: id, username: id, fullName: id, hobbyList: [] } } as any));
   vi.mocked(apiGet).mockImplementation(async (path) => {
     if (path.startsWith("/posts/")) return { postId: path.split("/")[2].split("?")[0], userId: "author-1", content: "Loaded", items: [] } as any;
     return { content: [], totalPages: 0 } as any;
@@ -82,6 +89,18 @@ it("changes the URL when a feed post opens and returns to feed on close", async 
   fireEvent.click(screen.getByText("Close post"));
   expect(screen.getByTestId("url")).toHaveTextContent(/^\/$/);
   expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+});
+
+it.each(["desktop", "mobile"] as const)("opens a direct conversation on the %s chat surface", async (mode) => {
+  fixtures.viewportMode = mode;
+  render(<Application />);
+  fireEvent.click(screen.getByText("Open author"));
+  await screen.findByText("Profile author-1");
+  fireEvent.click(screen.getByRole("button", { name: "Message author" }));
+
+  await waitFor(() => expect(fixtures.chatDirect).toHaveBeenCalledWith("viewer-1", "author-1"));
+  if (mode === "desktop") await screen.findByText("Mini chat conversation-1");
+  else await screen.findByText("Chat conversation-1");
 });
 
 it("loads a directly visited post and keeps the resource URL", async () => {
@@ -103,7 +122,7 @@ it("reads profiles from the URL instead of stored screen preferences", async () 
   sessionStorage.setItem("social-media-profile-user", "wrong-user");
   render(<Application entry="/profile/author-9" />);
   await screen.findByText("Profile author-9");
-  expect(profileApi.getSummary).toHaveBeenCalledWith("author-9", "viewer-1");
+  expect(fixtures.profileLoad).toHaveBeenCalledWith("author-9", "viewer-1");
   expect(screen.getByTestId("url")).toHaveTextContent("/profile/author-9");
 });
 

@@ -8,7 +8,7 @@ import { FloatingMessenger } from "./FloatingMessenger";
 
 const listeners = vi.hoisted(() => new Set<(event: ChatRealtimeEvent) => void>());
 const reconnects = vi.hoisted(() => new Set<() => void>());
-const api = vi.hoisted(() => ({ pins: vi.fn(), messageStates: vi.fn(), conversations: vi.fn(), messages: vi.fn(), setReaction: vi.fn(), removeReaction: vi.fn(), reactionStates: vi.fn(), reactors: vi.fn() }));
+const api = vi.hoisted(() => ({ pins: vi.fn(), messageStates: vi.fn(), conversations: vi.fn(), details: vi.fn(), presence: vi.fn(), messages: vi.fn(), setReaction: vi.fn(), removeReaction: vi.fn(), reactionStates: vi.fn(), reactors: vi.fn() }));
 const realtime = vi.hoisted(() => ({
   subscribe: vi.fn((_user: string, listener: (event: ChatRealtimeEvent) => void) => { listeners.add(listener); return () => { listeners.delete(listener); }; }),
   subscribeReconnect: vi.fn((listener: () => void) => { reconnects.add(listener); return () => { reconnects.delete(listener); }; }),
@@ -40,6 +40,8 @@ beforeEach(() => {
   api.pins.mockResolvedValue({ version: 0, canManage: false, items: [] });
   api.messageStates.mockResolvedValue([]);
   api.conversations.mockResolvedValue({ items: [conversation], hasMore: false, nextCursor: null });
+  api.details.mockResolvedValue({ members: [{ userId: "me" }, { userId: "peer" }] });
+  api.presence.mockResolvedValue({ userId: "peer", online: false, lastActiveAt: null });
   api.messages.mockResolvedValue({ items: [message], hasMore: false, nextCursor: null });
   api.setReaction.mockImplementation((_c, _u, _m, reaction: ReactionType) => Promise.resolve(state(reaction)));
   api.removeReaction.mockResolvedValue(state(null, 3));

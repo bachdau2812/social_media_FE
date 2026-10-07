@@ -410,6 +410,22 @@
   margin-top: 2px;
 }
 
+.dm-thread-list > button.chat-load-more {
+  display: block;
+  width: calc(100% - 20px);
+  min-height: 40px;
+  margin: 8px 10px;
+  border: 1px solid #e4e4df;
+  border-radius: 8px;
+  background: #fff;
+  color: #454540;
+  text-align: center;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+.dm-thread-list > button.chat-load-more:hover { background: #f7f7f5; }
+.dm-thread-list > button.chat-load-more:disabled { cursor: wait; opacity: 0.65; }
+
 .dm-thread-list > button:hover {
   background: var(--message-hover);
 }

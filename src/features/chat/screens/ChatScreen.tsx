@@ -2,6 +2,7 @@ import { ChevronLeft, MessageCircle, MoreHorizontal, PenLine, Search, X } from "
 import { useEffect, useMemo, useState } from "react";
 import { ChatMediaViewer } from "../components/ChatMediaExperience";
 import { ConversationDetailsDrawer } from "../components/ConversationDetailsDrawer";
+import { ChatPresenceStatus } from "../components/ChatPresenceStatus";
 import { ChatComposer } from "../components/ChatComposer";
 import { ChatMessageList } from "../components/ChatMessageList";
 import { NewConversationDialog } from "../components/NewConversationDialog";
@@ -79,6 +80,9 @@ export function ChatScreen({ userId, username, onOpenProfile, onOpenStory, initi
           <span><strong>{thread.title}</strong><small>{thread.preview}</small></span>
           {thread.unreadCount > 0 && <em>{thread.unreadCount > 99 ? "99+" : thread.unreadCount}</em>}
         </button>)}
+        {controller.hasMoreThreads && <button type="button" className="chat-load-more" onClick={() => void controller.loadMoreThreads()} disabled={controller.loadingMoreThreads}>
+          {controller.loadingMoreThreads ? "Đang tải..." : controller.threadPageError ? "Thử tải lại cuộc trò chuyện" : "Tải thêm cuộc trò chuyện"}
+        </button>}
       </div>
     </aside>
     <section className={`dm-conversation-panel ${detailsOpen ? "details-open" : ""}`}>
@@ -86,7 +90,9 @@ export function ChatScreen({ userId, username, onOpenProfile, onOpenStory, initi
         <header className="dm-conversation-header">
           <button type="button" className="dm-mobile-back" onClick={closeThread} aria-label="Quay lại hộp thư"><ChevronLeft size={20} /></button>
           <Avatar thread={controller.active} large />
-          <div><strong>{controller.active.title}</strong><small>{controller.active.isDissolved ? "Nhóm đã giải tán" : "Cuộc trò chuyện"}</small></div>
+          <div><strong>{controller.active.title}</strong>{controller.active.type === "DIRECT"
+            ? <ChatPresenceStatus actorId={userId} conversationId={controller.active.id} conversationType={controller.active.type} />
+            : <small>{controller.active.isDissolved ? "Nhóm đã giải tán" : "Cuộc trò chuyện"}</small>}</div>
           <div className="dm-header-actions"><button type="button" onClick={() => setDetailsOpen((value) => !value)} aria-label="Chi tiết cuộc trò chuyện" aria-expanded={detailsOpen}><MoreHorizontal size={20} /></button></div>
         </header>
         <PinnedMessagesBar key={`${userId}/${controller.activeId}`} controller={controller} />

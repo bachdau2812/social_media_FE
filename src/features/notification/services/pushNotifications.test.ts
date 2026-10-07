@@ -26,7 +26,7 @@ vi.mock("firebase/messaging", () => ({
 
 vi.mock("../../../shared/api", () => ({ apiSend: firebaseMocks.apiSend }));
 
-import { syncGrantedPushRegistration } from "./pushNotifications";
+import { startForegroundPushNotifications, stopForegroundPushNotifications, syncGrantedPushRegistration, unregisterPushDevice } from "./pushNotifications";
 
 describe("syncGrantedPushRegistration", () => {
   const registration = { showNotification: vi.fn() };
@@ -88,6 +88,56 @@ describe("syncGrantedPushRegistration", () => {
     expect(requestPermission).not.toHaveBeenCalled();
     expect(register).not.toHaveBeenCalled();
     expect(firebaseMocks.getToken).not.toHaveBeenCalled();
+    expect(firebaseMocks.apiSend).not.toHaveBeenCalled();
+  });
+
+  it("does not register an old account after registration is canceled", async () => {
+    let resolveToken!: (token: string) => void;
+    firebaseMocks.getToken.mockImplementationOnce(() => new Promise((resolve) => { resolveToken = resolve; }));
+    const controller = new AbortController();
+    const pending = syncGrantedPushRegistration("user-1", controller.signal);
+    await vi.waitFor(() => expect(firebaseMocks.getToken).toHaveBeenCalled());
+
+    controller.abort();
+    resolveToken("device-token");
+
+    await expect(pending).resolves.toBe(false);
+    expect(firebaseMocks.apiSend).not.toHaveBeenCalled();
+  });
+
+  it("passes the account lifecycle signal to the push token write", async () => {
+    const signal = new AbortController().signal;
+
+    await expect(syncGrantedPushRegistration("user-1", signal)).resolves.toBe(true);
+
+    expect(firebaseMocks.apiSend).toHaveBeenCalledWith("/notifications/push-tokens", "POST", {
+      userId: "user-1", deviceId: expect.any(String), deviceToken: "device-token",
+    }, { signal });
+  });
+
+  it("does not install a foreground listener when startup completes after teardown", async () => {
+    let resolveSupport!: (supported: boolean) => void;
+    firebaseMocks.isSupported.mockReturnValueOnce(new Promise((resolve) => { resolveSupport = resolve; }));
+    const pending = startForegroundPushNotifications({ onReceived: vi.fn() });
+
+    stopForegroundPushNotifications();
+    resolveSupport(true);
+    await pending;
+
+    expect(firebaseMocks.onMessage).not.toHaveBeenCalled();
+  });
+
+  it("removes the current device registration before logout", async () => {
+    window.localStorage.setItem("social-media-push-device-id", "device-1");
+
+    await unregisterPushDevice();
+
+    expect(firebaseMocks.apiSend).toHaveBeenCalledWith("/notifications/push-tokens?deviceId=device-1", "DELETE");
+  });
+
+  it("does not make a server request when this browser has no push device id", async () => {
+    await unregisterPushDevice();
+
     expect(firebaseMocks.apiSend).not.toHaveBeenCalled();
   });
 });

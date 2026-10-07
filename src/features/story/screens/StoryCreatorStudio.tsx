@@ -20,49 +20,28 @@ import {
 import { useEffect, useMemo, useRef, useState } from "react";
 import "./StoryCreatorStudio.css";
 import "./StoryCreatorMobileFirst.css";
-import { apiGet, apiSend, uploadCloudinaryMedia } from "../../../shared/api";
+import { uploadCloudinaryMedia } from "../../../shared/api";
+import { storyApi } from "../api/story.api";
+import { musicCatalogApi } from "../../../shared/music";
 import { validateMediaFile } from "../../../shared/media";
 import {
-  MUSIC_FETCH_RESULT_EVENT,
   MusicSegmentEditor,
   MusicTrackBrowser,
-  requestMusicFetch,
   type MusicDto,
-  type MusicFetchResult,
+  useMusicFetchController,
   useMusicSegmentPreview,
 } from "../../../shared/music";
 import { emitAppToast } from "../../../shared/notifications/appToast";
 import { useBodyScrollLock } from "../../../shared/overlays/useBodyScrollLock";
-import { createStoryPublicationId, storyPublicationFields } from "./storyPublication";
-
-type Page<T> = { content: T[]; pageNumber?: number; totalPages?: number };
-type DraftStatus = "ready" | "uploading" | "publishing" | "published" | "failed";
-type DraftBackground = "black" | "soft" | "blur";
-type DraftFit = "contain" | "cover";
-
-type StoryDraft = {
-  id: string;
-  file: File | null;
-  previewUrl: string;
-  secureUrl?: string;
-  publicId?: string;
-  resourceType?: string;
-  fileName: string;
-  mediaType: "IMAGE" | "VIDEO";
-  status: DraftStatus;
-  fit: DraftFit;
-  background: DraftBackground;
-  muted: boolean;
-  music: MusicDto | null;
-  musicStart: number | null;
-  musicEnd: number | null;
-  error?: string;
-};
+import { createStoryPublicationId } from "../creation/storyPublication";
+import type { DraftBackground, StoryDraft, StoryDraftSaveRequest } from "../creation/storyDraft";
+import { publishStoryDrafts } from "../creation/publishStoryDrafts";
 
 type StoryCreatorStudioProps = {
   userId: string;
   onClose: () => void;
   onPublished: () => void | Promise<void>;
+  onSaveDraft?: (request: StoryDraftSaveRequest) => Promise<unknown>;
   onDraftSaved?: (draft: { id: string; draftType: "STORY"; mediaCount: number; captionPreview: string; updatedAt: string }) => void;
   initialDraft?: { id: string; draftType: string; payload?: string | null } | null;
 };
@@ -98,7 +77,7 @@ function formatSeconds(value: number | null) {
   return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
 
-export function StoryCreatorStudio({ userId, onClose, onPublished, onDraftSaved, initialDraft }: StoryCreatorStudioProps) {
+export function StoryCreatorStudio({ userId, onClose, onPublished, onSaveDraft, onDraftSaved, initialDraft }: StoryCreatorStudioProps) {
 async function composeImageStoryFile(draft: StoryDraft): Promise<File> {
   if (!draft.file) throw new Error("Story media file is unavailable.");
   if (draft.mediaType !== "IMAGE") return draft.file;
@@ -131,7 +110,6 @@ async function composeImageStoryFile(draft: StoryDraft): Promise<File> {
   const [mode, setMode] = useState<"edit" | "review">("edit");
   const [musicQuery, setMusicQuery] = useState("");
   const [musicResults, setMusicResults] = useState<MusicDto[]>([]);
-  const [fetchingTrackIds, setFetchingTrackIds] = useState<Set<string>>(() => new Set());
   const [musicLoading, setMusicLoading] = useState(false);
   const [musicLoadingMore, setMusicLoadingMore] = useState(false);
   const [musicPage, setMusicPage] = useState(0);
@@ -151,42 +129,11 @@ async function composeImageStoryFile(draft: StoryDraft): Promise<File> {
     toggleSegment: toggleMusicSegment,
     stop: stopMusicPreview,
   } = useMusicSegmentPreview();
-
-  useEffect(() => {
-    const handleMusicFetchResult = (event: Event) => {
-      const detail = (event as CustomEvent<MusicFetchResult>).detail;
-      if (!detail || (detail.kind !== "success" && detail.kind !== "failure")) return;
-      const trackId = detail.kind === "success" ? detail.music.id : detail.trackId;
-      setFetchingTrackIds((current) => {
-        if (!current.has(trackId)) return current;
-        const next = new Set(current);
-        next.delete(trackId);
-        return next;
-      });
-      if (previewingId === trackId) stopMusicPreview();
-      if (detail.kind === "success") {
-        setMusicResults((current) => current.map((music) => music.id === trackId ? detail.music : music));
-      }
-    };
-    window.addEventListener(MUSIC_FETCH_RESULT_EVENT, handleMusicFetchResult);
-    return () => window.removeEventListener(MUSIC_FETCH_RESULT_EVENT, handleMusicFetchResult);
-  }, [previewingId, stopMusicPreview]);
-
-  async function fetchTrack(music: MusicDto) {
-    if (music.fetched || fetchingTrackIds.has(music.id)) return;
-    setFetchingTrackIds((current) => new Set(current).add(music.id));
-    try {
-      await requestMusicFetch(music.id);
-      emitAppToast(`Đang tải bài hát ${music.displayName}...`);
-    } catch {
-      setFetchingTrackIds((current) => {
-        const next = new Set(current);
-        next.delete(music.id);
-        return next;
-      });
-      emitAppToast("Không thể bắt đầu tải bài hát.");
-    }
-  }
+  const { fetchingTrackIds, fetchTrack } = useMusicFetchController({
+    previewingId,
+    stopPreview: stopMusicPreview,
+    onFetched: (music) => setMusicResults((current) => current.map((item) => item.id === music.id ? music : item)),
+  });
 
   const active = drafts.find((draft) => draft.id === activeId) ?? drafts[0] ?? null;
   const readyCount = drafts.filter((draft) => draft.status !== "published").length;
@@ -241,7 +188,7 @@ async function composeImageStoryFile(draft: StoryDraft): Promise<File> {
     setMusicHasMore(true);
       setMusicLoading(true);
       try {
-        const page = await apiGet<Page<MusicDto>>(`/musics?page=0&size=10&keyword=${encodeURIComponent(musicQuery)}`, { signal: controller.signal });
+        const page = await musicCatalogApi.search(musicQuery, 0, 10, controller.signal);
         if (requestVersion !== musicRequestVersion.current) return;
         setMusicResults(page.content ?? []);
         setMusicPage(page.pageNumber ?? 0);
@@ -264,7 +211,7 @@ async function composeImageStoryFile(draft: StoryDraft): Promise<File> {
     const nextPage = musicPage + 1;
     setMusicLoadingMore(true);
     try {
-      const page = await apiGet<Page<MusicDto>>(`/musics?page=${nextPage}&size=10&keyword=${encodeURIComponent(musicQuery)}`);
+      const page = await musicCatalogApi.search(musicQuery, nextPage, 10);
       if (requestVersion !== musicRequestVersion.current) return;
       setMusicResults((current) => {
         const existing = new Set(current.map((music) => music.id));
@@ -372,18 +319,19 @@ async function composeImageStoryFile(draft: StoryDraft): Promise<File> {
 
   async function saveDraftAndClose() {
     setPublishing(true);
-    const uploads = await Promise.all(drafts.map(async (item) => item.secureUrl
-      ? { secureUrl: item.secureUrl, publicId: item.publicId ?? "", resourceType: item.resourceType ?? item.mediaType.toLowerCase() }
-      : uploadCloudinaryMedia(await composeImageStoryFile(item))));
-    const draft = {
-      id: initialDraft?.id ?? `story-draft-${Date.now()}`,
-      draftType: "STORY" as const,
-      mediaCount: drafts.length,
-      captionPreview: drafts[0]?.fileName ?? "Story draft",
-      updatedAt: new Date().toISOString(),
-    };
     try {
-      await apiSend(`/me/${encodeURIComponent(userId)}/drafts`, "POST", {
+      if (!onSaveDraft) throw new Error("Story draft storage is unavailable.");
+      const uploads = await Promise.all(drafts.map(async (item) => item.secureUrl
+        ? { secureUrl: item.secureUrl, publicId: item.publicId ?? "", resourceType: item.resourceType ?? item.mediaType.toLowerCase() }
+        : uploadCloudinaryMedia(await composeImageStoryFile(item))));
+      const draft = {
+        id: initialDraft?.id ?? `story-draft-${Date.now()}`,
+        draftType: "STORY" as const,
+        mediaCount: drafts.length,
+        captionPreview: drafts[0]?.fileName ?? "Story draft",
+        updatedAt: new Date().toISOString(),
+      };
+      await onSaveDraft({
         id: initialDraft?.id ?? null,
         draftType: "STORY",
         thumbnailUrl: uploads[0]?.secureUrl ?? null,
@@ -419,42 +367,24 @@ async function composeImageStoryFile(draft: StoryDraft): Promise<File> {
     stopMusicPreview();
     setPublishing(true);
     setNotice("");
-    let failed = 0;
-    let failureMessage = "";
     const publicationId = publicationIdRef.current ?? createStoryPublicationId();
     publicationIdRef.current = publicationId;
-    for (const [draftIndex, draft] of drafts.entries()) {
-      if (draft.status === "published") continue;
-      try {
-        patchDraft(draft.id, { status: "uploading", error: undefined });
-        const upload = draft.secureUrl
-          ? { secureUrl: draft.secureUrl, publicId: draft.publicId ?? "", resourceType: draft.resourceType ?? draft.mediaType.toLowerCase() }
-          : await uploadCloudinaryMedia(await composeImageStoryFile(draft));
-        patchDraft(draft.id, { status: "publishing" });
-        await apiSend("/profile-media/stories", "POST", {
-          userId,
-          mediaUrl: upload.secureUrl,
-          musicId: draft.music?.id ?? null,
-          musicUrl: null,
-          musicStart: draft.music ? draft.musicStart : null,
-          musicEnd: draft.music ? draft.musicEnd : null,
-          ...storyPublicationFields(publicationId, draftIndex, drafts.length),
-        });
-        patchDraft(draft.id, { status: "published" });
-      } catch (error) {
-        failed += 1;
-        failureMessage ||= error instanceof Error ? error.message : "Không thể đăng Story.";
-        patchDraft(draft.id, {
-          status: "failed",
-          error: error instanceof Error ? error.message : "Không thể đăng Story.",
-        });
-      }
-    }
+    const publication = await publishStoryDrafts(userId, drafts, publicationId, {
+      uploadDraft: async (draft) => draft.secureUrl
+        ? {
+            secureUrl: draft.secureUrl,
+            publicId: draft.publicId ?? "",
+            resourceType: draft.resourceType ?? draft.mediaType.toLowerCase(),
+          }
+        : uploadCloudinaryMedia(await composeImageStoryFile(draft)),
+      createStory: storyApi.create,
+      updateDraft: patchDraft,
+    });
     setPublishing(false);
-    if (failed > 0) {
-      const notice = `${failed} Story chưa đăng được. Các Story còn lại đã được giữ nguyên.`;
+    if (publication.failedCount > 0) {
+      const notice = `${publication.failedCount} Story chưa đăng được. Các Story còn lại đã được giữ nguyên.`;
       setNotice(notice);
-      emitAppToast(failureMessage || notice);
+      emitAppToast(publication.firstFailureMessage || notice);
       return;
     }
     emitAppToast("Story đang được xử lý và sẽ sớm hiển thị.");
@@ -465,7 +395,6 @@ async function composeImageStoryFile(draft: StoryDraft): Promise<File> {
     }
     onClose();
   }
-
   function requestClose() {
     if (drafts.some((draft) => draft.status !== "published")) setClosePrompt(true);
     else onClose();

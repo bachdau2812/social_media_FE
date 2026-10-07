@@ -1,17 +1,17 @@
 import { ChevronLeft } from "lucide-react";
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { apiGet, apiSend } from "../shared/api";
 import { useViewportMode } from "../shared/hooks/useViewportMode";
 import type { ViewKey } from "./router/navigation.types";
-import { usePostEventStream, type Post, type RepostToggleResponse } from "../features/post";
-import { profileApi, profileToView as mapProfileToView, type ConnectionTab, type ConnectionUserDto, type Profile } from "../features/profile";
+import { type Post, usePostMutationController } from "../features/post";
+import { applyConnectionRemoval, type ConnectionTab, type ConnectionUserDto, type Profile, useProfileController } from "../features/profile";
 import { archivedStoryToItem, type StoryArchiveDto, type StoryItem } from "../features/story";
-import { ChatScreen, FloatingMessenger, useChatUnreadCount, type ChatNavigationTarget, type ConversationDto } from "../features/chat";
-import { NotificationScreen as FeatureNotificationScreen, refreshNotificationUnreadCount, startForegroundPushNotifications, stopForegroundPushNotifications, syncGrantedPushRegistration, useNotificationUnreadCount } from "../features/notification";
+import { ChatScreen, FloatingMessenger, chatApi, useChatUnreadCount, type ChatNavigationTarget } from "../features/chat";
+import { NotificationScreen as FeatureNotificationScreen, refreshNotificationUnreadCount, startForegroundPushNotifications, stopForegroundPushNotifications, syncGrantedPushRegistration, unregisterPushDevice, useNotificationUnreadCount } from "../features/notification";
 import { ConnectionsModal, ProfileScreen } from "../features/profile";
 import { CreateContentMenu } from "./components/CreateContentMenu";
 import { consumePendingNotificationDestination, decodeNotificationDeepLink, savePendingNotificationDestination, subscribeToNotificationNavigation, type AppDestination } from "../features/notification";
-import { StoryCreatorStudio, StoryViewer, orderStoryQueue, persistSeenStoryIds, readSeenStoryIds, storyApi, storyStartIndex, type StoryHighlightDto } from "../features/story";
+import { StoryCreatorStudio, StoryViewer, orderStoryQueue, storyApi, storyStartIndex, useStorySeenState, type StoryHighlightDto } from "../features/story";
+import { libraryApi } from "../features/library";
 import { PostCreationStudio, PostDetail, PostEditDialog } from "../features/post";
 import { useFeedMediaSuspension } from "../features/post/hooks/useFeedMediaSuspension";
 import { PostInteractionProvider } from "../features/post/hooks/PostInteractionProvider";
@@ -22,7 +22,7 @@ import { useStoryRoute } from "./router/useStoryRoute";
 import { routes } from "./router/routes";
 import { ScreenLocationProvider } from "./router/ScreenLocation";
 import { SuggestedFriendsPanel } from "../features/suggestions";
-import type { ContentDraft } from "../features/library";
+import type { DraftResumeIntent } from "../features/library";
 import { BootScreen, LoginScreen } from "../features/auth";
 import { InlineError, MobileNav, Navigation } from "./components/Navigation";
 import { MobileAppHeader } from "./components/MobileAppHeader";
@@ -32,6 +32,7 @@ import { useAuth } from "./providers/AuthProvider";
 import { useToast } from "./providers/ToastProvider";
 import { installPageVisibilityMediaController } from "./bootstrap/mediaController";
 import { ResponsiveAppShell } from "./layouts/ResponsiveAppShell";
+import { useAccountRealtime } from "./composition/useAccountRealtime";
 
 const FeatureSearchScreen = lazy(() => import("../features/search").then((module) => ({ default: module.SearchScreen })));
 const FeatureLibraryScreen = lazy(() => import("../features/library").then((module) => ({ default: module.LibraryScreen })));
@@ -64,7 +65,7 @@ function readStoredFeedTab(): "DISCOVER" | "FRIENDS" {
     }
 }
 export default function SocialApplication() {
-    const { session, status: authStatus, error: authError, login, logout } = useAuth();
+    const { session, status: authStatus, error: authError, recoverableError: authErrorIsRecoverable, login, logout } = useAuth();
     const navigation = useAppNavigation();
     const { go, openResource, restoreScroll } = navigation;
     const view = navigation.screen.view;
@@ -83,6 +84,14 @@ export default function SocialApplication() {
     const [status, setStatus] = useState<LoadState>("idle");
     const [errorText, setErrorText] = useState("");
     const { showToast: showAppToast } = useToast();
+    const { loadSummary: loadProfileSummary } = useProfileController(session?.userId);
+    const postMutations = usePostMutationController({
+        userId: session?.userId,
+        getPost: findPost,
+        updatePost: updatePostSurfaces,
+        onError: showAppToast,
+        savePost: libraryApi.savePost,
+    });
     const chatUnreadCount = useChatUnreadCount(session?.userId);
     const notificationUnreadCount = useNotificationUnreadCount(session?.userId);
     const viewportMode = useViewportMode();
@@ -91,9 +100,8 @@ export default function SocialApplication() {
         nonce: number;
     }) | null>(null);
     const storyCreatorOpen = Boolean(navigation.route.createStory);
-    const [resumeDraft, setResumeDraft] = useState<ContentDraft | null>(null);
-    const [seenStoryIds, setSeenStoryIds] = useState<Set<string>>(new Set());
-    const [recentlySeenStoryIds, setRecentlySeenStoryIds] = useState<Set<string>>(new Set());
+    const [resumeDraft, setResumeDraft] = useState<DraftResumeIntent | null>(null);
+    const { seenStoryIds, recentlySeenStoryIds, markSeen } = useStorySeenState(session?.userId);
     const fullChatTarget = navigation.screen.chatTarget ?? null;
     const activeConversationId = fullChatTarget?.conversationId;
     const storyViewerStories = storyRoute.stories;
@@ -122,10 +130,7 @@ export default function SocialApplication() {
         } else go(destinationPath(destination));
     }, [session?.userId, viewportMode, go, openResource]);
     useEffect(() => {
-        if (session?.userId) {
-            setSeenStoryIds(readSeenStoryIds(session.userId));
-            setRecentlySeenStoryIds(new Set());
-        } else initialDestinationHandled.current = false;
+        if (!session?.userId) initialDestinationHandled.current = false;
     }, [session?.userId]);
     useEffect(() => installPageVisibilityMediaController(), []);
     useEffect(() => {
@@ -153,9 +158,12 @@ export default function SocialApplication() {
     useEffect(() => {
         if (!session?.userId)
             return;
-        void syncGrantedPushRegistration(session.userId).catch((error: unknown) => {
+        const controller = new AbortController();
+        void syncGrantedPushRegistration(session.userId, controller.signal).catch((error: unknown) => {
+            if (controller.signal.aborted) return;
             console.warn("Unable to synchronize this device for push notifications:", error instanceof Error ? error.message : "Unknown error");
         });
+        return () => controller.abort();
     }, [session?.userId]);
     useEffect(() => {
         if (!session?.userId) {
@@ -191,8 +199,8 @@ export default function SocialApplication() {
                 }
             } else invalidateFeed();
             if (target === "profile") {
-                const data = await profileApi.getSummary(profileUserId ?? userId, userId);
-                if (version === screenRequestVersion.current) setProfile(mapProfileToView(data));
+                const data = await loadProfileSummary(profileUserId ?? userId, userId);
+                if (version === screenRequestVersion.current) setProfile(data);
             }
             if (version === screenRequestVersion.current) setStatus("ready");
         } catch (error) {
@@ -200,7 +208,7 @@ export default function SocialApplication() {
             setStatus("error");
             setErrorText(error instanceof Error ? error.message : "Request failed");
         }
-    }, [loadFeed, invalidateFeed, profileUserId]);
+    }, [loadFeed, invalidateFeed, loadProfileSummary, profileUserId]);
     useEffect(() => {
         if (session?.userId && navigation.screen.known) void loadScreenData(view, session.userId, feedTab, true);
         return () => { screenRequestVersion.current += 1; };
@@ -211,18 +219,22 @@ export default function SocialApplication() {
         storyCreatorOpen,
         storyViewerOpen: selectedStoryIndex !== null,
     });
-    usePostEventStream(session?.userId, {
+    useAccountRealtime(session?.userId, {
         onAvatarUploadResult: (data) => {
             showAppToast(data.result === "APPROVED" ? "Đã cập nhật ảnh đại diện" : "Ảnh đại diện không được chấp nhận");
             if (data.result === "APPROVED")
                 setProfile((value) => value?.id === data.userId ? { ...value, avatarUrl: data.mediaUrl } : value);
         },
-        onUploadResult: (data) => {
-            const fallback = data.kind === "story"
-                ? data.success ? "Story đã được đăng" : "Không thể đăng Story"
-                : data.success ? "Bài viết đã được đăng" : "Không thể đăng bài viết";
+        onPostUploadResult: (data) => {
+            const fallback = data.success ? "Bài viết đã được đăng" : "Không thể đăng bài viết";
             showAppToast(data.message || fallback);
             if (data.success && session)
+                void loadScreenData("home", session.userId, feedTab);
+        },
+        onStoryUploadResult: (result) => {
+            const fallback = result.success ? "Story đã được đăng" : "Không thể đăng Story";
+            showAppToast(result.message || fallback);
+            if (result.success && session)
                 void loadScreenData("home", session.userId, feedTab);
         },
         onMusicFetchResult: (data) => {
@@ -230,7 +242,7 @@ export default function SocialApplication() {
                 ? `Đã tải xong bài hát ${data.music.displayName}`
                 : data.message || "Không thể tải bài hát");
         },
-    }, feedTab);
+    });
     async function handleLogin(username: string, password: string) {
         setErrorText("");
         try {
@@ -241,6 +253,9 @@ export default function SocialApplication() {
         }
     }
     async function handleLogout() {
+        await unregisterPushDevice().catch((error: unknown) => {
+            console.warn("Unable to remove this device's push registration:", error instanceof Error ? error.message : "Unknown error");
+        });
         await logout();
         try {
             sessionStorage.removeItem(ACTIVE_FEED_TAB_STORAGE_KEY);
@@ -285,7 +300,7 @@ export default function SocialApplication() {
         if (!session)
             return;
         try {
-            const conversation = await apiSend<ConversationDto>(`/chat/conversations/direct?actorId=${encodeURIComponent(session.userId)}`, "POST", { targetUserId });
+            const conversation = await chatApi.direct(session.userId, targetUserId);
             if (viewportMode === "mobile") {
                 navigation.go(routes.conversation(conversation.id));
             }
@@ -330,77 +345,33 @@ export default function SocialApplication() {
         setConnectionsOpen(true);
     }
     function handleConnectionRemoved(tab: ConnectionTab, row: ConnectionUserDto) {
-        setProfile((current) => current ? {
-            ...current,
-            followerCount: tab === "FOLLOWERS" ? Math.max(0, current.followerCount - 1) : current.followerCount,
-            followingCount: tab === "FOLLOWING" ? Math.max(0, current.followingCount - 1) : current.followingCount,
-            friendCount: row.friend ? Math.max(0, (current.friendCount ?? 0) - 1) : current.friendCount,
-        } : current);
+        setProfile((current) => applyConnectionRemoval(current, tab, row));
     }
-    function togglePost(postId: string, key: "liked" | "saved" | "reposted") {
-        if (!session)
-            return;
-        const current = selectedPost?.id === postId ? selectedPost : posts.find((post) => post.id === postId) ?? profile?.posts.find((post) => post.id === postId) ?? profile?.reposts.find((post) => post.id === postId);
-        const currentActive = Boolean(current?.viewerState[key]);
-        const nextActive = !currentActive;
-        const applyState = (active: boolean) => {
-          const patchPost = (post: Post): Post => {
-            if (post.id !== postId)
-                return post;
-            if (post.viewerState[key] === active)
-                return post;
-            const next = { ...post, viewerState: { ...post.viewerState, [key]: active } };
-            if (key === "liked")
-                next.engagement = { ...next.engagement, likes: Math.max(0, next.engagement.likes + (active ? 1 : -1)) };
-            if (key === "reposted")
-                next.engagement = { ...next.engagement, reposts: Math.max(0, next.engagement.reposts + (active ? 1 : -1)) };
-            return next;
-          };
-          setPosts((items) => items.map(patchPost));
-          setProfile((value) => value ? { ...value, posts: value.posts.map(patchPost), reposts: value.reposts.map(patchPost) } : value);
-          setSelectedPost((value) => value ? patchPost(value) : value);
-        };
-        const rollback = () => {
-            applyState(currentActive);
-            showAppToast("Không thể cập nhật bài viết. Vui lòng thử lại.");
-        };
-        applyState(nextActive);
-        if (key === "liked")
-            void apiSend(`/likes/users/${session.userId}`, "POST", { targetId: postId, targetType: "POST" }).catch(rollback);
-        if (key === "saved")
-            void apiSend(`/me/${session.userId}/saved/items`, "POST", { postId }).catch(rollback);
-        if (key === "reposted") {
-            const method = nextActive ? "POST" : "DELETE";
-            void apiSend<RepostToggleResponse>(`/posts/${encodeURIComponent(postId)}/repost?actorId=${encodeURIComponent(session.userId)}`, method).then((response) => {
-                const syncPost = (post: Post): Post => post.id === postId ? { ...post, viewerState: { ...post.viewerState, reposted: response.reposted }, engagement: { ...post.engagement, reposts: response.repostCount } } : post;
-                setPosts((items) => items.map(syncPost));
-                setProfile((value) => value ? { ...value, posts: value.posts.map(syncPost), reposts: value.reposts.map(syncPost) } : value);
-                setSelectedPost((value) => value ? syncPost(value) : value);
-            }).catch(rollback);
-        }
+    function findPost(postId: string) {
+        return selectedPost?.id === postId ? selectedPost : posts.find((post) => post.id === postId) ?? profile?.posts.find((post) => post.id === postId) ?? profile?.reposts.find((post) => post.id === postId);
     }
-    function incrementPostCommentCount(postId: string) {
-        const increment = (post: Post): Post => post.id === postId
-            ? { ...post, engagement: { ...post.engagement, comments: post.engagement.comments + 1 } }
-            : post;
-        setPosts((items) => items.map(increment));
-        setProfile((value) => value ? { ...value, posts: value.posts.map(increment), reposts: value.reposts.map(increment) } : value);
-        setSelectedPost((value) => value ? increment(value) : value);
-    }
-    function handlePostEdited(updated: Post) {
-        const replace = (post: Post) => post.id === updated.id ? { ...post, ...updated } : post;
-        setPosts((items) => items.map(replace));
+    function updatePostSurfaces(postId: string, update: (post: Post) => Post) {
+        setPosts((items) => items.map((post) => post.id === postId ? update(post) : post));
         setProfile((value) => value ? {
             ...value,
-            posts: value.posts.map(replace),
-            reposts: value.reposts.map(replace),
+            posts: value.posts.map((post) => post.id === postId ? update(post) : post),
+            reposts: value.reposts.map((post) => post.id === postId ? update(post) : post),
         } : value);
-        setSelectedPost((value) => value ? replace(value) : value);
+        setSelectedPost((value) => value?.id === postId ? update(value) : value);
+    }
+    function togglePost(postId: string, key: "liked" | "saved" | "reposted") {
+        return postMutations.togglePost(postId, key);
+    }
+    function incrementPostCommentCount(postId: string) {
+        postMutations.incrementCommentCount(postId);
+    }
+    function handlePostEdited(updated: Post) {
+        postMutations.applyEditedPost(updated);
     }
     async function handleArchivePost(post: Post) {
         if (!session || post.author.id !== session.userId)
             return;
-        await apiSend<void>(`/me/${encodeURIComponent(session.userId)}/archive`, "POST", {
+        await libraryApi.archivePost(session.userId, {
             contentId: post.id,
             contentType: "POST",
             thumbnailUrl: post.media[0]?.url ?? null,
@@ -417,27 +388,7 @@ export default function SocialApplication() {
         showAppToast("Đã chuyển bài viết vào Kho lưu trữ");
     }
     function handleStoryViewed(storyId: string) {
-        if (!session)
-            return;
-        setRecentlySeenStoryIds((current) => current.has(storyId) ? current : new Set(current).add(storyId));
-        void storyApi.recordView(storyId, session.userId).then(() => {
-            setSeenStoryIds((current) => {
-                if (current.has(storyId))
-                    return current;
-                const next = new Set(current);
-                next.add(storyId);
-                persistSeenStoryIds(session.userId, next);
-                return next;
-            });
-        }).catch(() => {
-            setRecentlySeenStoryIds((current) => {
-                if (!current.has(storyId))
-                    return current;
-                const next = new Set(current);
-                next.delete(storyId);
-                return next;
-            });
-        });
+        void markSeen(storyId);
     }
     function openStoryFromReply(ownerId: string, storyId: string) {
         void navigateToDestination({ kind: "story", ownerId, storyId, scope: "single" });
@@ -487,7 +438,7 @@ export default function SocialApplication() {
     const orderedStories = session ? orderStoryQueue(stories, session.userId, seenStoryIds, recentlySeenStoryIds) : stories;
     const activeStoryQueue = storyViewerStories;
     if (!session)
-        return <LoginScreen errorText={errorText || authError} loading={false} onLogin={handleLogin}/>;
+        return <LoginScreen errorText={errorText || authError} errorIsRecoverable={!errorText && authErrorIsRecoverable} loading={false} onLogin={handleLogin}/>;
     const showBackButton = navigation.hasBack;
     const shellClassName = view === "home" ? "home-shell" : view === "chat" ? "chat-shell" : "centered-shell";
     const showMobileChrome = view !== "create";
@@ -506,18 +457,18 @@ export default function SocialApplication() {
         {!navigation.route.known && <div role="alert" className="feed-state"><strong>Không tìm thấy trang</strong><button onClick={() => navigation.go(routes.home, { replace: true })}>Về trang chủ</button></div>}
         {navigation.route.known && view === "home" && <HomeScreen userId={session.userId} tab={feedTab} setTab={switchFeedTab} stories={orderedStories} posts={posts} status={status} hasMore={feedHasMore} loadingMore={feedLoadingMore} onLoadMore={loadMoreFeed} onSelectPost={openPostDetail} onCreateStory={() => navigation.openResource(routes.createStory)} onSelectStory={(story) => { const queue = [...orderedStories]; openStoryQueue(queue, storyStartIndex(queue, story.userId)); }} onTogglePost={togglePost} onEditPost={setEditingPost} onArchivePost={handleArchivePost} onOpenProfile={openProfile}/>}
         {view === "search" && <Suspense fallback={<FeatureLoading/>}><FeatureSearchScreen viewerId={session.userId} onSelectPost={openPostDetail} onOpenProfile={openProfile}/></Suspense>}
-        {view === "create" && <PostCreationStudio userId={session.userId} initialDraft={resumeDraft?.draftType === "POST" ? resumeDraft : null} onBack={() => { setResumeDraft(null); handleBackNavigation(); }} onClose={() => { setResumeDraft(null); handleBackNavigation(); }} onDraftSaved={() => undefined} onPublished={() => loadScreenData("home", session.userId, feedTab)}/>}
+        {view === "create" && <PostCreationStudio userId={session.userId} initialDraft={resumeDraft?.kind === "POST" ? resumeDraft.draft : null} onBack={() => { setResumeDraft(null); handleBackNavigation(); }} onClose={() => { setResumeDraft(null); handleBackNavigation(); }} onDraftSaved={() => undefined} onSaveDraft={(request) => libraryApi.saveDraft(session.userId, request)} onPublished={() => loadScreenData("home", session.userId, feedTab)}/>}
         {view === "notifications" && <FeatureNotificationScreen userId={session.userId} onNavigate={navigateToDestination}/>}
-        {view === "library" && <Suspense fallback={<FeatureLoading/>}><FeatureLibraryScreen userId={session.userId} onOpenPost={(postId) => { void navigateToDestination({ kind: "post", postId }); }} onOpenStory={(storyId) => {
+        {view === "library" && <Suspense fallback={<FeatureLoading/>}><FeatureLibraryScreen key={session.userId} userId={session.userId} onOpenPost={(postId) => { void navigateToDestination({ kind: "post", postId }); }} onOpenStory={(storyId) => {
                 void storyApi.archive(session.userId, 0, 100).then((page) => {
                     const item = page.content.find((entry) => entry.id === storyId);
                     if (!item)
                         return;
                     openStoryQueue([archivedStoryToItem(item, { username: session.username, fullName: session.username })], 0, "owner");
                 });
-            }} onResumeDraft={(draft: ContentDraft) => {
-                setResumeDraft(draft);
-                if (draft.draftType === "STORY")
+            }} onResumeDraft={(intent) => {
+                setResumeDraft(intent);
+                if (intent.kind === "STORY")
                     navigation.openResource(routes.createStory);
                 else
                     navigation.go(routes.createPost);
@@ -534,7 +485,7 @@ export default function SocialApplication() {
       {connectionsOpen && <ConnectionsModal viewerId={session.userId} profile={profile} activeTab={connectionTab} onTabChange={setConnectionTab} onClose={() => setConnectionsOpen(false)} onOpenProfile={async (userId) => { setConnectionsOpen(false); await openProfile(userId); }} onRelationshipRemoved={handleConnectionRemoved}/>}
       {navigation.route.story && selectedStoryIndex === null && <div className="modal-backdrop" role="dialog" aria-modal="true"><section style={{ padding: 24, background: "var(--surface, white)", borderRadius: 16 }}><button onClick={navigation.closeResource}>Đóng</button>{storyRoute.error ? <div role="alert">Không thể tải Story.<button onClick={storyRoute.retry}>Thử lại</button></div> : <div role="status">Đang tải Story…</div>}</section></div>}
       {selectedStoryIndex !== null && activeStoryQueue[selectedStoryIndex] && <StoryViewer stories={activeStoryQueue} index={selectedStoryIndex} currentUserId={session.userId} onClose={navigation.closeResource} onSelectIndex={selectStoryIndex} onViewed={handleStoryViewed} onDelete={handleDeleteStory} onOpenProfile={openProfile}/>}
-      {storyCreatorOpen && <StoryCreatorStudio userId={session.userId} initialDraft={resumeDraft?.draftType === "STORY" ? resumeDraft : null} onClose={() => { navigation.closeResource(); setResumeDraft(null); }} onDraftSaved={() => undefined} onPublished={() => loadScreenData("home", session.userId, feedTab)}/>}
+      {storyCreatorOpen && <StoryCreatorStudio userId={session.userId} initialDraft={resumeDraft?.kind === "STORY" ? resumeDraft.draft : null} onClose={() => { navigation.closeResource(); setResumeDraft(null); }} onSaveDraft={(request) => libraryApi.saveDraft(session.userId, request)} onDraftSaved={() => undefined} onPublished={() => loadScreenData("home", session.userId, feedTab)}/>}
       {navigation.route.postId && !selectedPost && <div className="modal-backdrop post-detail-backdrop" role="dialog" aria-modal="true"><section className="post-route-state" style={{ padding: 24, background: "var(--surface, white)", borderRadius: 16 }}><button onClick={closePostDetail}>Đóng</button>{postRouteError ? <div role="alert"><strong>Bài viết không còn tồn tại hoặc bạn không có quyền xem.</strong><button onClick={retryPostRoute}>Thử lại</button></div> : <div role="status">Đang tải bài viết…</div>}</section></div>}
       {selectedPost && <PostDetail post={selectedPost} viewerId={session.userId} targetCommentId={targetCommentId} onClose={closePostDetail} onTogglePost={togglePost} onCommentCreated={incrementPostCommentCount} onEdit={() => setEditingPost(selectedPost)} onArchive={() => void handleArchivePost(selectedPost)} onOpenProfile={openProfile}/>}
       {editingPost && <PostEditDialog post={editingPost} userId={session.userId} onClose={() => setEditingPost(null)} onSaved={handlePostEdited}/>}

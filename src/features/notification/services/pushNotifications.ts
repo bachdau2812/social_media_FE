@@ -21,6 +21,7 @@ const firebaseConfig = {
 const DEVICE_ID_KEY = "social-media-push-device-id";
 let foregroundMessageUnsubscribe: Unsubscribe | null = null;
 let foregroundStartPromise: Promise<void> | null = null;
+let foregroundStartVersion = 0;
 let foregroundGate = createForegroundNotificationGate();
 
 export interface ForegroundPushOptions {
@@ -40,6 +41,10 @@ export interface ForegroundPushOptions {
 
 let foregroundOptions: ForegroundPushOptions = {};
 
+function throwIfAborted(signal?: AbortSignal) {
+  if (signal?.aborted) throw new DOMException("Push registration was canceled.", "AbortError");
+}
+
 function getDeviceId() {
   const existing = window.localStorage.getItem(DEVICE_ID_KEY);
   if (existing) return existing;
@@ -54,18 +59,23 @@ export function currentNotificationPermission(): NotificationPermission | "unsup
     : Notification.permission;
 }
 
-async function registerPushDevice(userId: string) {
+async function registerPushDevice(userId: string, signal?: AbortSignal) {
   const vapidKey = import.meta.env.VITE_FIREBASE_VAPID_KEY?.trim();
   const registration = await navigator.serviceWorker.register("/firebase-messaging-sw.js", { scope: "/" });
+  throwIfAborted(signal);
   await navigator.serviceWorker.ready;
+  throwIfAborted(signal);
   const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
   const messaging = getMessaging(app);
   const tokenOptions = vapidKey
     ? { serviceWorkerRegistration: registration, vapidKey }
     : { serviceWorkerRegistration: registration };
   const deviceToken = await getToken(messaging, tokenOptions);
+  throwIfAborted(signal);
   if (!deviceToken) throw new Error("Firebase did not return a messaging token.");
-  await apiSend("/notifications/push-tokens", "POST", { userId, deviceId: getDeviceId(), deviceToken });
+  const body = { userId, deviceId: getDeviceId(), deviceToken };
+  if (signal) await apiSend("/notifications/push-tokens", "POST", body, { signal });
+  else await apiSend("/notifications/push-tokens", "POST", body);
   return deviceToken;
 }
 
@@ -80,10 +90,23 @@ export async function requestAndRegisterPushNotifications(userId: string) {
   return registerPushDevice(userId);
 }
 
-export async function syncGrantedPushRegistration(userId: string): Promise<boolean> {
-  if (currentNotificationPermission() !== "granted" || !(await isSupported())) return false;
-  await registerPushDevice(userId);
-  return true;
+export async function syncGrantedPushRegistration(userId: string, signal?: AbortSignal): Promise<boolean> {
+  if (signal?.aborted) return false;
+  if (currentNotificationPermission() !== "granted") return false;
+  try {
+    if (!(await isSupported()) || signal?.aborted) return false;
+    await registerPushDevice(userId, signal);
+    return !signal?.aborted;
+  } catch (error) {
+    if (signal?.aborted) return false;
+    throw error;
+  }
+}
+
+export async function unregisterPushDevice() {
+  const deviceId = window.localStorage.getItem(DEVICE_ID_KEY);
+  if (!deviceId) return;
+  await apiSend(`/notifications/push-tokens?deviceId=${encodeURIComponent(deviceId)}`, "DELETE");
 }
 
 async function handleForegroundMessage(payload: MessagePayload) {
@@ -128,21 +151,25 @@ export function startForegroundPushNotifications(options: ForegroundPushOptions 
   if (foregroundMessageUnsubscribe) return Promise.resolve();
   if (foregroundStartPromise) return foregroundStartPromise;
 
+  const version = ++foregroundStartVersion;
   foregroundStartPromise = (async () => {
-    if (currentNotificationPermission() !== "granted" || !(await isSupported())) return;
+    if (currentNotificationPermission() !== "granted") return;
+    if (!(await isSupported()) || version !== foregroundStartVersion) return;
     const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
     const messaging = getMessaging(app);
+    if (version !== foregroundStartVersion) return;
     foregroundMessageUnsubscribe = onMessage(messaging, (payload) => {
       void handleForegroundMessage(payload);
     });
   })().finally(() => {
-    foregroundStartPromise = null;
+    if (version === foregroundStartVersion) foregroundStartPromise = null;
   });
 
   return foregroundStartPromise;
 }
 
 export function stopForegroundPushNotifications() {
+  foregroundStartVersion += 1;
   foregroundMessageUnsubscribe?.();
   foregroundMessageUnsubscribe = null;
   foregroundStartPromise = null;

@@ -98,6 +98,21 @@ describe("NotificationScreen requests", () => {
     expect(screen.getByText("Visible Actor")).toBeInTheDocument();
   });
 
+  it("does not expose the previous account inbox while the next account loads", async () => {
+    const next = deferred<Page<NotificationDto>>();
+    notificationApi.list.mockResolvedValueOnce(page("Previous Actor", "previous"))
+      .mockReturnValueOnce(next.promise);
+    const { rerender } = render(<NotificationScreen userId="viewer-1" onNavigate={vi.fn()} />);
+    expect(await screen.findByText("Previous Actor")).toBeInTheDocument();
+
+    rerender(<NotificationScreen userId="viewer-2" onNavigate={vi.fn()} />);
+
+    expect(screen.queryByText("Previous Actor")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Đang tải thông báo")).toBeInTheDocument();
+    next.resolve(page("Next Actor", "next"));
+    expect(await screen.findByText("Next Actor")).toBeInTheDocument();
+  });
+
   it("rolls back an optimistic read state and reports a failed mark-read request", async () => {
     notificationApi.list.mockResolvedValueOnce(page("Visible Actor", "visible"));
     notificationApi.markRead.mockRejectedValueOnce(new Error("offline"));

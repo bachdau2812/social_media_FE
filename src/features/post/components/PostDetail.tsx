@@ -1,265 +1,30 @@
-import { Archive, Bookmark, Check, ChevronLeft, ChevronRight, Heart, Home, Lock, MessageCircle, MoreHorizontal, Pause, PenLine, Play, RefreshCw, Repeat2, Reply, Send, Users, Volume2, VolumeX, WifiOff, X } from "lucide-react";
+import { Archive, Bookmark, Check, ChevronLeft, ChevronRight, Heart, Home, Lock, MessageCircle, MoreHorizontal, Pause, PenLine, RefreshCw, Repeat2, Reply, Send, Users, Volume2, VolumeX, WifiOff, X } from "lucide-react";
 import { type ChangeEvent, type FormEvent, type MouseEvent, type RefCallback, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { apiGet, apiSend, uploadCloudinaryMedia } from "../../../shared/api";
+import { uploadCloudinaryMedia } from "../../../shared/api";
 import { Avatar as SharedAvatar } from "../../../shared/components";
 import { validateMediaFile } from "../../../shared/media";
 import type { Post } from "../model/post.types";
 import type { PostDetailsDto } from "../model/post.dto";
 import { mergePostDetail } from "../model/post.mapper";
-import { postMediaRatioValue } from "../model/postMediaRatio";
-import { FEED_MUSIC_SUSPEND_EVENT, reportFeedMusicVisibility, subscribeFeedMusicOwner } from "../model/feedMusicCoordinator";
 import { formatRelativeTime } from "../../../shared/utils";
 import { useBodyScrollLock } from "../../../shared/overlays/useBodyScrollLock";
+import { CommentRow } from "./CommentRow";
+import { commentApi, type CommentDto } from "../api/comment.api";
+import { postApi } from "../api/post.api";
 import { PostDetailComposer, type CommentMediaSelection } from "./PostDetailComposer";
 import { AdjacentPostMediaPreloads } from "./AdjacentPostMediaPreloads";
 import { PostVideoPlayer } from "./PostVideoPlayer";
+import { ActionBar, EngagementListModal } from "./PostEngagement";
 import { usePostInteraction } from "../hooks/usePostInteraction";
 import { useForegroundOverlay } from "../../../shared/overlays/useForegroundOverlay";
-type Page<T> = { content: T[]; pageNumber: number; totalElements: number; totalPages: number };
 type PostDetails = PostDetailsDto;
-type CommentDto = { id: string; postId: string; userId: string; parentId?: string | null; content?: string | null; commentType?: string | null; mediaUrl?: string | null; timestamp?: string | null; replyCount?: number; hasLiked?: boolean; username?: string | null; fullName?: string | null; avatarUrl?: string | null };
-type CommentCreateResponse = { commentId: string; message?: string | null };
 type CommentMediaViewer = { url: string; video: boolean };
-type LikeToggleResponse = { targetId: string; targetType: string; liked: boolean; likeId?: string | null };
 type CommentNode = CommentDto & { replies: CommentNode[] };
-type EngagementProfileDto = { user: { userId: string; username?: string | null; fullName?: string | null }; currentAvatar?: { secureUrl?: string | null; url?: string | null } | null };
-type EngagementPerson = { id: string; username: string; displayName: string; avatarUrl: string };
-
 function Avatar({ src, label }: { src?: string; label: string }) { return <SharedAvatar src={src} name={label} alt={label} />; }
-function MusicIcon() { return <Volume2 size={18} />; }
-function createClientMessageId() { return window.crypto.randomUUID(); }
 function formatCount(value: number) { return value >= 1000 ? `${(value / 1000).toFixed(value >= 10000 ? 0 : 1)}k` : String(value); }
 function sortComments(items: CommentDto[], mode: "RELEVANT" | "RECENT") { return [...items].sort((left, right) => { if (mode === "RELEVANT") { const leftReplies = items.filter((item) => item.parentId === left.id).length; const rightReplies = items.filter((item) => item.parentId === right.id).length; if (leftReplies !== rightReplies) return rightReplies - leftReplies; } return new Date(right.timestamp ?? 0).getTime() - new Date(left.timestamp ?? 0).getTime(); }); }
 function buildCommentTree(items: CommentDto[], mode: "RELEVANT" | "RECENT") { const nodes = new Map<string, CommentNode>(); sortComments(items, mode).forEach((item) => nodes.set(item.id, { ...item, replies: [] })); const roots: CommentNode[] = []; nodes.forEach((node) => { if (node.parentId && nodes.has(node.parentId)) nodes.get(node.parentId)?.replies.push(node); else roots.push(node); }); return roots; }
-function isVideoMediaUrl(url: string) { return /\/video\/upload\/|\.(mp4|webm|mov|m4v)(?:$|\?)/i.test(url); }
-export function PostCard({ post, index, viewerId, onOpen, onToggle, onEdit, onArchive, onOpenProfile }: { post: Post; index: number; viewerId: string; onOpen: () => void; onToggle: (postId: string, key: "liked" | "saved" | "reposted") => void; onEdit: () => void; onArchive: () => Promise<void>; onOpenProfile: (userId: string) => Promise<void> }) {
-  const [expanded, setExpanded] = useState(false);
-  const [engagementKind, setEngagementKind] = useState<"LIKES" | "REPOSTS" | null>(null);
-  const [menuOpen, setMenuOpen] = useState(false);
-  const interaction = usePostInteraction(post.id, viewerId, "feed", Boolean(engagementKind));
-  useForegroundOverlay(Boolean(engagementKind));
-  function openPost() { interaction.click(); onOpen(); }
-  const captionLimit = 180;
-  const captionNeedsExpansion = post.caption.length > captionLimit;
-  const rawCaptionPreview = post.caption.slice(0, captionLimit).trim();
-  const wordSafePreview = rawCaptionPreview.replace(/\s+\S*$/, "").trim();
-  const caption = expanded || !captionNeedsExpansion ? post.caption : `${wordSafePreview || rawCaptionPreview}...`;
-  const repostActivity = post.feedActivity?.type === "REPOST" && post.feedActivity.actor
-    ? post.feedActivity
-    : undefined;
-  useEffect(() => setExpanded(false), [post.id]);
-  function openAuthor(event: MouseEvent<HTMLButtonElement>) { event.stopPropagation(); void onOpenProfile(post.author.id); }
-  function openReposter(event: MouseEvent<HTMLButtonElement>) {
-    event.stopPropagation();
-    if (repostActivity?.actor) void onOpenProfile(repostActivity.actor.id);
-  }
-  return <article className={`post-card ${post.layoutVariant.toLowerCase()}`}>
-    <div className="post-index">{String(index).padStart(2, "0")}</div>
-    {repostActivity && <div className="post-repost-context">
-      <button
-        type="button"
-        aria-label={`${repostActivity.actor?.displayName} đã đăng lại bài viết`}
-        onClick={openReposter}
-      >
-        <Repeat2 size={15} aria-hidden="true" />
-        <strong>{repostActivity.actor?.displayName}</strong>
-        <span>đã đăng lại bài viết</span>
-      </button>
-      <time dateTime={repostActivity.occurredAt}>{formatRelativeTime(repostActivity.occurredAt)}</time>
-    </div>}
-    <header className="post-author"><button className="author-button" onClick={openAuthor}><Avatar src={post.author.avatarUrl} label={post.author.username} /><span><strong>{post.author.username} <small className="post-author-time">• {formatRelativeTime(post.createdAt)}</small></strong>{post.music && <small className="post-author-music"><MusicIcon /> {post.music.displayName}</small>}</span>{post.author.relationship === "FRIEND" && <Check className="verified-badge" size={14} />}</button><span className="post-menu-anchor"><button className="icon-button" aria-label="Post menu" aria-expanded={menuOpen} onClick={() => setMenuOpen((value) => !value)}><MoreHorizontal size={20} /></button>{menuOpen && <span className="post-menu-popover">{post.author.id === viewerId && <><button type="button" onClick={() => { setMenuOpen(false); onEdit(); }}><PenLine size={16} /> Chỉnh sửa</button><button type="button" onClick={() => { setMenuOpen(false); void onArchive(); }}><Archive size={16} /> Kho lưu trữ</button></>}<button type="button" onClick={() => setMenuOpen(false)}><X size={16} /> Đóng</button></span>}</span></header>
-    <PostMediaCarousel post={post} onOpen={openPost} interactionRef={interaction.ref} />
-    <ActionBar post={post} onToggle={onToggle} onComment={openPost} onOpenEngagement={setEngagementKind} />
-    <div className="post-content">
-      {post.caption && <p className={expanded ? "feed-caption expanded" : "feed-caption collapsed"}><button onClick={openAuthor}>@{post.author.username}</button> {caption}{captionNeedsExpansion && <button className="text-action" aria-expanded={expanded} onClick={() => setExpanded((value) => !value)}>{expanded ? "Less" : "More"}</button>}</p>}
-      {Boolean(post.hashtags?.length) && <div className="hashtag-row">{post.hashtags?.slice(0, 5).map((tag) => <span key={tag}>#{tag}</span>)}</div>}
-      {post.comments[0] && <button className="comment-preview" onClick={openPost}><strong>@{post.comments[0].author}</strong> {post.comments[0].text}</button>}
-      <div className="post-meta"><time>{formatRelativeTime(post.createdAt)}</time></div>
-    </div>
-    {engagementKind && <EngagementListModal postId={post.id} kind={engagementKind} viewerId={viewerId} onClose={() => setEngagementKind(null)} onOpenProfile={onOpenProfile} />}
-  </article>;
-}
-
-function FeedMediaLayer({ media, className, interactive = false, playbackEligible = false }: { media: Post["media"][number]; className: string; interactive?: boolean; playbackEligible?: boolean }) {
-  return <span className={className} aria-hidden={interactive ? undefined : true}>
-    {media.type === "VIDEO"
-      ? <PostVideoPlayer source={media.url} eligible={interactive && playbackEligible} preload={interactive ? "auto" : "metadata"} />
-      : <img src={media.url} alt={interactive ? media.alt : ""} draggable={false} />}
-  </span>;
-}function PostMediaCarousel({ post, onOpen, interactionRef }: { post: Post; onOpen: () => void; interactionRef: RefCallback<HTMLElement> }) {
-  const [activeIndex, setActiveIndex] = useState(0);
-  const [previousMediaIndex, setPreviousMediaIndex] = useState<number | null>(null);
-  const [transitionDirection, setTransitionDirection] = useState<"next" | "previous">("next");
-  const [playbackActive, setPlaybackActive] = useState(false);
-  const [feedSuspended, setFeedSuspended] = useState(false);
-  const [musicMuted, setMusicMuted] = useState(false);
-
-  const frameRef = useRef<HTMLDivElement | null>(null);
-  const setFrameRef = useCallback((node: HTMLDivElement | null) => {
-    frameRef.current = node;
-    interactionRef(node);
-  }, [interactionRef]);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const playbackKeyRef = useRef<string | null>(null);
-  const playbackPositions = useRef<Map<string, number>>(new Map());
-  const transitionTimerRef = useRef<number | null>(null);
-  const transitioningRef = useRef(false);
-  const activeMedia = post.media[activeIndex];
-  const previousMedia = previousMediaIndex === null ? null : post.media[previousMediaIndex];
-  const activeMusic = post.music ?? activeMedia?.music ?? null;
-  const playbackKey = activeMusic
-    ? (post.music ? `post:${post.id}:${activeMusic.id}` : `item:${activeMedia?.id}:${activeMusic.id}`)
-    : null;
-  const hasMany = post.media.length > 1;
-  const canPlayMusic = Boolean(activeMusic && activeMedia && activeMediaSupportsMusic(activeMedia));
-  const frameAspectRatio = postMediaRatioValue(post.mediaRatio);
-
-  useEffect(() => {
-    const handleSuspend = (event: Event) => setFeedSuspended((event as CustomEvent<boolean>).detail);
-    window.addEventListener(FEED_MUSIC_SUSPEND_EVENT, handleSuspend);
-    return () => window.removeEventListener(FEED_MUSIC_SUSPEND_EVENT, handleSuspend);
-  }, []);
-
-  useEffect(() => {
-    const target = frameRef.current;
-    const unsubscribe = subscribeFeedMusicOwner((ownerId) => setPlaybackActive(ownerId === post.id));
-    if (!target || typeof IntersectionObserver === "undefined") {
-      setPlaybackActive(true);
-      return unsubscribe;
-    }
-    const observer = new IntersectionObserver(([entry]) => {
-      reportFeedMusicVisibility(post.id, entry?.isIntersecting ? entry.intersectionRatio : 0);
-    }, { threshold: [0, 0.35, 0.55, 0.6, 0.8, 1] });
-    observer.observe(target);
-    return () => {
-      observer.disconnect();
-      unsubscribe();
-      reportFeedMusicVisibility(post.id, 0);
-    };
-  }, [post.id]);
-
-  useEffect(() => {
-    const audio = audioRef.current;
-    if (!audio) return;
-    audio.loop = true;
-    return () => audio.pause();
-  }, []);
-
-  useEffect(() => {
-    const audio = audioRef.current;
-    if (!audio || playbackKeyRef.current === playbackKey) return;
-    const previousKey = playbackKeyRef.current;
-    if (previousKey && Number.isFinite(audio.currentTime)) playbackPositions.current.set(previousKey, audio.currentTime);
-    audio.pause();
-    playbackKeyRef.current = playbackKey;
-    if (!playbackKey || !activeMusic?.playbackUrl) {
-      audio.removeAttribute("src");
-      audio.load();
-      return;
-    }
-    audio.src = activeMusic.playbackUrl;
-    audio.load();
-    const resume = () => {
-      const savedPosition = playbackPositions.current.get(playbackKey) ?? 0;
-      audio.currentTime = Number.isFinite(savedPosition) && savedPosition < audio.duration ? savedPosition : 0;
-      if (playbackActive && !feedSuspended && canPlayMusic) void audio.play().catch(() => undefined);
-    };
-    audio.addEventListener("loadedmetadata", resume, { once: true });
-    return () => audio.removeEventListener("loadedmetadata", resume);
-  }, [playbackKey, activeMusic?.playbackUrl, playbackActive, feedSuspended, canPlayMusic]);
-
-  useEffect(() => {
-    const audio = audioRef.current;
-    if (!audio) return;
-    audio.muted = musicMuted;
-  }, [musicMuted]);
-
-  useEffect(() => {
-    const audio = audioRef.current;
-    if (!audio || !playbackKey || !activeMusic?.playbackUrl || !playbackActive || feedSuspended || !canPlayMusic) {
-      if (audio && playbackKeyRef.current && Number.isFinite(audio.currentTime)) playbackPositions.current.set(playbackKeyRef.current, audio.currentTime);
-      audio?.pause();
-      return;
-    }
-    void audio.play().catch(() => undefined);
-  }, [playbackActive, feedSuspended, canPlayMusic, playbackKey, activeMusic?.playbackUrl]);
-
-  useEffect(() => () => {
-    if (transitionTimerRef.current !== null) window.clearTimeout(transitionTimerRef.current);
-    const audio = audioRef.current;
-    const key = playbackKeyRef.current;
-    if (audio && key && Number.isFinite(audio.currentTime)) playbackPositions.current.set(key, audio.currentTime);
-  }, []);
-
-  function move(delta: number) {
-    if (transitioningRef.current) return;
-    const nextIndex = Math.min(post.media.length - 1, Math.max(0, activeIndex + delta));
-    if (nextIndex === activeIndex) return;
-    transitioningRef.current = true;
-    setTransitionDirection(delta > 0 ? "next" : "previous");
-    setPreviousMediaIndex(activeIndex);
-    setActiveIndex(nextIndex);
-    if (transitionTimerRef.current !== null) window.clearTimeout(transitionTimerRef.current);
-    transitionTimerRef.current = window.setTimeout(() => {
-      setPreviousMediaIndex(null);
-      transitioningRef.current = false;
-    }, 320);
-  }
-
-  function toggleMusicMuted() {
-    setMusicMuted((value) => !value);
-    if (audioRef.current?.paused && canPlayMusic && !feedSuspended) void audioRef.current.play().catch(() => undefined);
-  }
-
-  if (!post.media.length) return <button ref={interactionRef} className="media-button text-media" onClick={onOpen}><div className="text-post" title={post.caption || "No caption"}>{post.caption || "No caption"}</div></button>;
-  return <div ref={setFrameRef} className="post-media-frame" style={{ aspectRatio: frameAspectRatio }} tabIndex={0} onKeyDown={(event) => { if (event.key === "ArrowLeft") move(-1); if (event.key === "ArrowRight") move(1); }}>
-    <div className="media-surface feed-media-stage" role="button" tabIndex={0} onClick={onOpen} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") onOpen(); }}>
-      {previousMedia && <FeedMediaLayer media={previousMedia} className={"feed-media-content exiting slide-" + transitionDirection} />}
-      <FeedMediaLayer key={activeMedia.id} media={activeMedia} className={previousMedia ? "feed-media-content entering slide-" + transitionDirection : "feed-media-content"} interactive playbackEligible={playbackActive && !feedSuspended} />
-    </div>
-
-    {activeMedia.caption && <div key={`feed-caption-${activeMedia.id}`} className={`item-caption-thought feed-item-caption ${activeMedia.caption.length > 180 ? "long" : ""}`} tabIndex={0} role="button" aria-label={`View media caption: ${activeMedia.caption}`}><MessageCircle className="caption-trigger-icon" size={18} aria-hidden="true" /><p>{activeMedia.caption}</p></div>}
-    {canPlayMusic && <button type="button" className="feed-music-mute" onClick={toggleMusicMuted} aria-label={musicMuted ? "Unmute music" : "Mute music"} aria-pressed={musicMuted}>{musicMuted ? <VolumeX size={15} /> : <Volume2 size={15} />}</button>}
-    {hasMany && <><button className="carousel-control previous" onClick={() => move(-1)} disabled={activeIndex === 0 || previousMediaIndex !== null} aria-label="Previous media"><ChevronLeft size={19} /></button><button className="carousel-control next" onClick={() => move(1)} disabled={activeIndex === post.media.length - 1 || previousMediaIndex !== null} aria-label="Next media"><ChevronRight size={19} /></button><span className="media-counter">{String(activeIndex + 1).padStart(2, "0")} / {String(post.media.length).padStart(2, "0")}</span><span className="media-progress"><i style={{ width: `${((activeIndex + 1) / post.media.length) * 100}%` }} /></span></>}
-    <audio ref={audioRef} preload="metadata" muted={musicMuted} />
-    <AdjacentPostMediaPreloads media={post.media} activeIndex={activeIndex} />
-  </div>;
-}function ActionBar({ post, onToggle, onComment, onOpenEngagement, showCounts = true }: { post: Post; onToggle: (postId: string, key: "liked" | "saved" | "reposted") => void; onComment?: () => void; onOpenEngagement?: (kind: "LIKES" | "REPOSTS") => void; showCounts?: boolean }) {
-  return <div className="action-bar">
-    <div className="engagement-action"><button className={post.viewerState.liked ? "active like-active" : "like-action"} onClick={() => onToggle(post.id, "liked")} aria-label="Like"><Heart size={21} fill={post.viewerState.liked ? "currentColor" : "none"} /></button>{showCounts && <button className="engagement-count" onClick={() => onOpenEngagement?.("LIKES")} aria-label={`View ${post.engagement.likes} likes`}>{formatCount(post.engagement.likes)}</button>}</div>
-    <div className="engagement-action"><button onClick={onComment} aria-label="Comment"><MessageCircle size={21} /></button>{showCounts && <button className="engagement-count" onClick={onComment} aria-label={`Open ${post.engagement.comments} comments`}>{formatCount(post.engagement.comments)}</button>}</div>
-    <div className="engagement-action"><button className={post.viewerState.reposted ? "active repost-active" : "repost-action"} onClick={() => onToggle(post.id, "reposted")} aria-label="Repost"><RefreshCw size={21} /></button>{showCounts && <button className="engagement-count" onClick={() => onOpenEngagement?.("REPOSTS")} aria-label={`View ${post.engagement.reposts} reposts`}>{formatCount(post.engagement.reposts)}</button>}</div>
-    <button className={post.viewerState.saved ? "active save-action" : "save-action"} onClick={() => onToggle(post.id, "saved")} aria-label="Save"><Bookmark size={21} fill={post.viewerState.saved ? "currentColor" : "none"} /></button>
-  </div>;
-}
-function EngagementListModal({ postId, kind, viewerId, onClose, onOpenProfile }: { postId: string; kind: "LIKES" | "REPOSTS"; viewerId: string; onClose: () => void; onOpenProfile: (userId: string) => Promise<void> }) {
-  const [people, setPeople] = useState<EngagementPerson[]>([]);
-  const [state, setState] = useState<"loading" | "ready" | "error">("loading");
-  useEffect(() => {
-    let active = true;
-    const endpoint = kind === "LIKES"
-      ? `/likes/targets/${encodeURIComponent(postId)}/actors?targetType=POST&page=0&size=40`
-      : `/posts/${encodeURIComponent(postId)}/reposts/actors?page=0&size=40`;
-    setState("loading");
-    apiGet<Page<string>>(endpoint)
-      .then((page) => Promise.all((page.content ?? []).map((userId) => apiGet<EngagementProfileDto>(`/profiles/${encodeURIComponent(userId)}/summary?viewerId=${encodeURIComponent(viewerId)}&postLimit=1`).catch(() => null))))
-      .then((profiles) => { if (active) { setPeople(profiles.filter((item): item is EngagementProfileDto => Boolean(item)).map((item) => ({ id: item.user.userId, username: item.user.username || item.user.userId, displayName: item.user.fullName || item.user.username || item.user.userId, avatarUrl: item.currentAvatar?.secureUrl || item.currentAvatar?.url || "" }))); setState("ready"); } })
-      .catch(() => { if (active) setState("error"); });
-    return () => { active = false; };
-  }, [kind, postId, viewerId]);
-  return <div className="engagement-modal-backdrop" role="dialog" aria-modal="true" aria-label={kind === "LIKES" ? "People who liked this post" : "People who reposted this post"} onClick={onClose}>
-    <section className="engagement-modal" onClick={(event) => event.stopPropagation()}>
-      <header><strong>{kind === "LIKES" ? "Likes" : "Reposts"}</strong><button className="icon-button" onClick={onClose} aria-label="Close"><X size={19} /></button></header>
-      <div className="engagement-people-list">
-        {state === "loading" && <div className="engagement-list-loading"><span /><span /><span /></div>}
-        {state === "error" && <div className="engagement-list-state"><WifiOff size={20} /><strong>Could not load people</strong></div>}
-        {state === "ready" && people.length === 0 && <div className="engagement-list-state"><Users size={20} /><strong>No people yet</strong></div>}
-        {state === "ready" && people.map((person) => <button key={person.id} className="engagement-person" onClick={() => { onClose(); void onOpenProfile(person.id); }}><Avatar src={person.avatarUrl} label={person.username} /><span><strong>{person.displayName}</strong><small>@{person.username}</small></span><ChevronRight size={16} /></button>)}
-      </div>
-    </section>
-  </div>;
-}function FeedState({ icon: Icon, title, detail }: { icon: typeof Home; title: string; detail: string }) { return <div className="feed-state"><Icon size={24} /><strong>{title}</strong><span>{detail}</span></div>; }
 export function PostDetail({ post, viewerId, targetCommentId, onClose, onTogglePost, onCommentCreated, onEdit, onArchive, onOpenProfile }: { post: Post; viewerId: string; targetCommentId?: string | null; onClose: () => void; onTogglePost: (postId: string, key: "liked" | "saved" | "reposted") => void; onCommentCreated: (postId: string) => void; onEdit: () => void; onArchive: () => void; onOpenProfile: (userId: string) => Promise<void> }) {
   useBodyScrollLock(true);
   const [detailPost, setDetailPost] = useState(post);
@@ -327,7 +92,7 @@ export function PostDetail({ post, viewerId, targetCommentId, onClose, onToggleP
     setPreviousMediaIndex(null);
     mediaTransitioningRef.current = false;
     setDetailMediaReady(false);
-    apiGet<PostDetails>("/posts/" + encodeURIComponent(post.id) + "?mediaType=POST")
+    postApi.getSurfaceDetail(post.id)
       .then((detail) => {
         const hydrated = mergePostDetail(post, detail);
         if (active) {
@@ -347,7 +112,7 @@ export function PostDetail({ post, viewerId, targetCommentId, onClose, onToggleP
     let active = true;
     setCommentState("loading");
     setCommentPage(0);
-    apiGet<Page<CommentDto>>("/frontend/comments/post/" + encodeURIComponent(post.id) + "/page?viewerId=" + encodeURIComponent(viewerId) + "&page=0&size=10")
+    commentApi.pageByPost(post.id, viewerId)
       .then((page) => {
         if (active) {
           setComments(page.content ?? []);
@@ -368,11 +133,11 @@ export function PostDetail({ post, viewerId, targetCommentId, onClose, onToggleP
     void (async () => {
       try {
         const chain: string[] = [];
-        let current = await apiGet<CommentDto>(`/comments/${encodeURIComponent(targetCommentId)}`);
+        let current = await commentApi.byId(targetCommentId);
         if (current.postId !== post.id) throw new Error("Comment does not belong to this post");
         chain.push(current.id);
         for (let depth = 0; depth < 2 && current.parentId; depth += 1) {
-          current = await apiGet<CommentDto>(`/comments/${encodeURIComponent(current.parentId)}`);
+          current = await commentApi.byId(current.parentId);
           chain.push(current.id);
         }
         if (cancelled) return;
@@ -382,7 +147,7 @@ export function PostDetail({ post, viewerId, targetCommentId, onClose, onToggleP
         let nextPage = commentPage + 1;
         let hasMore = commentHasMore;
         while (!merged.some((item) => item.id === rootId) && hasMore) {
-          const page = await apiGet<Page<CommentDto>>(`/frontend/comments/post/${encodeURIComponent(post.id)}/page?viewerId=${encodeURIComponent(viewerId)}&page=${nextPage}&size=10`);
+          const page = await commentApi.pageByPost(post.id, viewerId, nextPage, 10);
           merged = [...merged, ...(page.content ?? [])].filter((item, index, values) => values.findIndex((candidate) => candidate.id === item.id) === index);
           nextPage = page.pageNumber + 1;
           hasMore = nextPage < page.totalPages;
@@ -523,7 +288,7 @@ export function PostDetail({ post, viewerId, targetCommentId, onClose, onToggleP
     const nextPage = commentPage + 1;
     setLoadingMoreComments(true);
     try {
-      const page = await apiGet<Page<CommentDto>>(`/frontend/comments/post/${encodeURIComponent(post.id)}/page?viewerId=${encodeURIComponent(viewerId)}&page=${nextPage}&size=10`);
+      const page = await commentApi.pageByPost(post.id, viewerId, nextPage, 10);
       setComments((current) => {
         const merged = [...current, ...(page.content ?? [])];
         return merged.filter((item, index) => merged.findIndex((candidate) => candidate.id === item.id) === index);
@@ -535,7 +300,7 @@ export function PostDetail({ post, viewerId, targetCommentId, onClose, onToggleP
     }
   }
   async function toggleCommentLike(id: string) {
-    const response = await apiSend<LikeToggleResponse>(`/likes/users/${encodeURIComponent(viewerId)}`, "POST", { targetId: id, targetType: "COMMENT" });
+    const response = await commentApi.toggleLike(viewerId, id);
     return response.liked;
   }
 
@@ -572,7 +337,7 @@ export function PostDetail({ post, viewerId, targetCommentId, onClose, onToggleP
     setSubmitError("");
     try {
       const uploaded = selectedMedia ? await uploadCloudinaryMedia(selectedMedia.file) : null;
-      const response = await apiSend<CommentCreateResponse>("/comments", "POST", {
+      const response = await commentApi.create({
         postId: post.id,
         userId: viewerId,
         parentId: replyTarget?.id ?? null,
@@ -770,7 +535,7 @@ function CommentThread({ item, depth, viewerId, postAuthorId, reloadToken, focus
     if (!showReplies || !canReply) return;
     let active = true;
     setReplyState("loading");
-    apiGet<CommentDto[]>(`/frontend/comments/parent/${encodeURIComponent(item.id)}?viewerId=${encodeURIComponent(viewerId)}&page=0&size=10`)
+    commentApi.replies(item.id, viewerId)
       .then((items) => { if (active) { setReplies(items ?? []); setReplyState("ready"); } })
       .catch(() => { if (active) setReplyState("error"); });
     return () => { active = false; };
@@ -783,70 +548,3 @@ function CommentThread({ item, depth, viewerId, postAuthorId, reloadToken, focus
     {showReplies && replyState === "ready" && replies.map((reply) => <CommentThread key={reply.id} item={{ ...reply, replies: [] }} depth={depth + 1} viewerId={viewerId} postAuthorId={postAuthorId} reloadToken={reloadToken} focusChain={focusChain} focusedCommentId={focusedCommentId} onLike={onLike} onReply={onReply} onOpenMedia={onOpenMedia} onOpenProfile={onOpenProfile} />)}
   </div>;
 }function CommentState({ icon: Icon, title, detail }: { icon: typeof Home; title: string; detail: string }) { return <div className="comment-state"><Icon size={22} /><strong>{title}</strong><span>{detail}</span></div>; }
-export function CommentRow({ item, depth = 0, viewerId, postAuthorId, liked = false, onLike, onReply, onOpenMedia, onOpenProfile }: { item: CommentDto; depth?: number; viewerId: string; postAuthorId?: string; liked?: boolean; onLike?: (id: string) => Promise<boolean>; onReply?: (item: CommentDto) => void; onOpenMedia?: (url: string, video: boolean) => void; onOpenProfile: (userId: string) => Promise<void> }) {
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [editing, setEditing] = useState(false);
-  const [content, setContent] = useState(item.content ?? "");
-  const [editText, setEditText] = useState(item.content ?? "");
-  const [saving, setSaving] = useState(false);
-  const [commentLiked, setCommentLiked] = useState(liked);
-  const [likePending, setLikePending] = useState(false);
-  const menuRef = useRef<HTMLSpanElement | null>(null);
-  const ownComment = item.userId === viewerId;
-  const deleted = item.commentType === "DELETED";
-  useEffect(() => { setContent(item.content ?? ""); setEditText(item.content ?? ""); }, [item.id, item.content]);
-  useEffect(() => { setCommentLiked(liked); }, [item.id, liked]);
-  useEffect(() => {
-    if (!menuOpen) return;
-    function closeOutside(event: PointerEvent) {
-      if (event.target instanceof Node && !menuRef.current?.contains(event.target)) setMenuOpen(false);
-    }
-    function closeOnEscape(event: KeyboardEvent) {
-      if (event.key === "Escape") setMenuOpen(false);
-    }
-    document.addEventListener("pointerdown", closeOutside);
-    document.addEventListener("keydown", closeOnEscape);
-    return () => {
-      document.removeEventListener("pointerdown", closeOutside);
-      document.removeEventListener("keydown", closeOnEscape);
-    };
-  }, [menuOpen]);
-  async function saveEdit() {
-    const next = editText.trim();
-    if (!next || saving) return;
-    setSaving(true);
-    try {
-      const updated = await apiSend<CommentDto>("/comments", "PUT", { commentId: item.id, userId: viewerId, content: next });
-      setContent(updated.content ?? next);
-      setEditText(updated.content ?? next);
-      setEditing(false);
-      setMenuOpen(false);
-    } finally {
-      setSaving(false);
-    }
-  }
-  async function toggleLike() {
-    if (!onLike || likePending) return;
-    const previous = commentLiked;
-    setCommentLiked(!previous);
-    setLikePending(true);
-    try {
-      setCommentLiked(await onLike(item.id));
-    } catch {
-      setCommentLiked(previous);
-    } finally {
-      setLikePending(false);
-    }
-  }
-  return <div className={depth ? "comment-row nested" : "comment-row"}>
-    <button type="button" className="comment-author-avatar" onClick={() => void onOpenProfile(item.userId)} aria-label={"Open profile for " + (item.username || item.userId)}><Avatar src={item.avatarUrl || undefined} label={item.username || item.userId} /></button>
-    <div className="comment-content">
-      {editing ? <div className="comment-edit"><textarea value={editText} onChange={(event) => setEditText(event.target.value)} aria-label="Edit comment" /><div><button type="button" onClick={() => { setEditing(false); setEditText(content); }}>Cancel</button><button type="button" onClick={() => void saveEdit()} disabled={!editText.trim() || saving}>{saving ? "Saving" : "Save"}</button></div></div> : <p className={deleted ? "comment-copy emoji-text deleted-comment" : "comment-copy emoji-text"}><button type="button" className="comment-author-name" onClick={() => void onOpenProfile(item.userId)}>{item.username || "Unknown user"}</button>{item.userId === postAuthorId && <span className="author-badge">Author</span>}{deleted ? " Deleted comment" : content ? ` ${content}` : null}</p>}
-      {item.mediaUrl && <button type="button" className="comment-media-open" onClick={() => onOpenMedia?.(item.mediaUrl as string, isVideoMediaUrl(item.mediaUrl as string))} aria-label={isVideoMediaUrl(item.mediaUrl) ? "Open comment video" : "Open comment image"}>
-        {isVideoMediaUrl(item.mediaUrl) ? <><video className="comment-media" src={item.mediaUrl} muted playsInline preload="metadata" /><span className="comment-media-play" aria-hidden="true"><Play size={22} fill="currentColor" /></span></> : <img className="comment-media" src={item.mediaUrl} alt="Comment attachment" />}
-      </button>}
-      <footer><time>{formatRelativeTime(item.timestamp ?? new Date().toISOString())}</time>{!deleted && onReply && <button onClick={() => onReply(item)}>Reply</button>}<span ref={menuRef} className="comment-options"><button onClick={() => setMenuOpen((value) => !value)} aria-label="Comment options" aria-expanded={menuOpen}><MoreHorizontal size={13} /></button>{menuOpen && <span className="comment-options-menu" role="menu"><button type="button" role="menuitem" onClick={() => setMenuOpen(false)}>Report</button>{ownComment && !deleted && <button type="button" role="menuitem" onClick={() => { setEditing(true); setMenuOpen(false); }}>Edit</button>}<button type="button" role="menuitem" onClick={() => setMenuOpen(false)}>Close</button></span>}</span></footer>
-    </div>
-    {!deleted && <button className={commentLiked ? "comment-like active" : "comment-like"} onClick={() => void toggleLike()} disabled={likePending} aria-label={commentLiked ? "Unlike comment" : "Like comment"}><Heart size={15} fill={commentLiked ? "currentColor" : "none"} /></button>}
-  </div>;
-}function EmptyState({ icon: Icon, title, action }: { icon: typeof Home; title: string; action: string }) { return <div className="empty-state"><Icon size={24} /><strong>{title}</strong><button>{action}</button></div>; }

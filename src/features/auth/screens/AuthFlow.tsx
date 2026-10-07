@@ -44,10 +44,12 @@ type FieldErrors = Partial<Record<keyof RegistrationForm, string>>;
 
 export function AuthFlow({
   errorText,
+  errorIsRecoverable = false,
   loading,
   onLogin,
 }: {
   errorText: string;
+  errorIsRecoverable?: boolean;
   loading: boolean;
   onLogin: (username: string, password: string) => Promise<void>;
 }) {
@@ -243,7 +245,7 @@ export function AuthFlow({
   }
 
   const safeExternalError = !externalErrorDismissed && errorText
-    ? mapAuthError(null, "login", locale)
+    ? errorIsRecoverable ? errorText : mapAuthError(null, "login", locale)
     : "";
   const content = (() => {
     switch (step) {

@@ -6,6 +6,26 @@ export type PostInteractionRequest = {
   impressionId: string;
 };
 
+export type CreatePostRequest = {
+  userId: string;
+  content: string;
+  hashtags: string[];
+  mediaRatio: string;
+  musicId: string | null;
+  musicStart: number | null;
+  musicEnd: number | null;
+  items: Array<{
+    orderNumber: number;
+    secureUrl: string;
+    publicId: string;
+    resourceType: string;
+    caption: string | null;
+    musicId: string | null;
+    musicStart: number | null;
+    musicEnd: number | null;
+  }>;
+};
+
 export type PostInteractionAcceptedResponse = {
   eventId: string;
   computedScore: number;

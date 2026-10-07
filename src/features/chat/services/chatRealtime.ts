@@ -21,7 +21,7 @@ export type RealtimeChatMessage = MessageReactionFields & {
 };
 
 export type ChatRealtimeEvent = {
-  type: "MESSAGE_CREATED" | "CURSOR_UPDATED" | "GROUP_CREATED" | "MEMBER_ADDED" | "MEMBER_REMOVED" | "MESSAGE_REACTION_CHANGED" | "MESSAGE_DELETED" | "PINS_CHANGED";
+  type: "MESSAGE_CREATED" | "CURSOR_UPDATED" | "GROUP_CREATED" | "MEMBER_ADDED" | "MEMBER_REMOVED" | "MEMBER_ROLE_CHANGED" | "MESSAGE_REACTION_CHANGED" | "MESSAGE_DELETED" | "PINS_CHANGED";
   eventId: string;
   conversationId: string;
   actorId: string;
@@ -34,7 +34,87 @@ export type ChatRealtimeEvent = {
   pinVersion?: number | null;
 };
 
+export class ChatRealtimeEventDeduplicator {
+  private readonly recentIds = new Map<string, true>();
+
+  constructor(private readonly capacity = 1_000) {}
+
+  shouldIgnore(eventId: string | null | undefined): boolean {
+    if (!eventId) return false;
+    if (this.recentIds.has(eventId)) return true;
+
+    this.recentIds.set(eventId, true);
+    if (this.recentIds.size > this.capacity) {
+      const oldest = this.recentIds.keys().next().value;
+      if (oldest) this.recentIds.delete(oldest);
+    }
+    return false;
+  }
+
+  clear() {
+    this.recentIds.clear();
+  }
+}
+
+type RecipientCursor = { deliveredSeq: number; readSeq: number };
+
+export class ChatRecipientCursorTracker {
+  private readonly aggregateSnapshots = new Map<string, RecipientCursor>();
+  private readonly memberCursors = new Map<string, Map<string, RecipientCursor>>();
+  private readonly activePeerIds = new Map<string, Set<string>>();
+
+  rememberAggregate(conversationId: string, deliveredSeq = 0, readSeq = 0) {
+    const current = this.aggregateSnapshots.get(conversationId) ?? { deliveredSeq: 0, readSeq: 0 };
+    this.aggregateSnapshots.set(conversationId, {
+      deliveredSeq: Math.max(current.deliveredSeq, deliveredSeq),
+      readSeq: Math.max(current.readSeq, readSeq),
+    });
+  }
+
+  rememberMember(conversationId: string, viewerId: string, actorId: string, recipientIds: string[],
+    deliveredSeq = 0, readSeq = 0) {
+    if (!actorId || actorId === viewerId) return;
+    const peers = new Set([actorId, ...recipientIds].filter((id) => id && id !== viewerId));
+    this.activePeerIds.set(conversationId, peers);
+    const cursors = this.memberCursors.get(conversationId) ?? new Map<string, RecipientCursor>();
+    const current = cursors.get(actorId) ?? { deliveredSeq: 0, readSeq: 0 };
+    cursors.set(actorId, {
+      deliveredSeq: Math.max(current.deliveredSeq, deliveredSeq),
+      readSeq: Math.max(current.readSeq, readSeq),
+    });
+    this.memberCursors.set(conversationId, cursors);
+
+    const minDelivered = Math.min(...[...peers].map((id) => cursors.get(id)?.deliveredSeq ?? 0));
+    const minRead = Math.min(...[...peers].map((id) => cursors.get(id)?.readSeq ?? 0));
+    this.rememberAggregate(conversationId, minDelivered, minRead);
+  }
+
+  clearMembers(conversationId: string) {
+    this.activePeerIds.delete(conversationId);
+    this.memberCursors.delete(conversationId);
+  }
+
+  cursor(conversationId: string): RecipientCursor {
+    return { ...(this.aggregateSnapshots.get(conversationId) ?? { deliveredSeq: 0, readSeq: 0 }) };
+  }
+
+  outgoingStatus(conversationId: string, sequence: number): "sent" | "delivered" | "read" {
+    const cursor = this.cursor(conversationId);
+    if (sequence <= cursor.readSeq) return "read";
+    if (sequence <= cursor.deliveredSeq) return "delivered";
+    return "sent";
+  }
+
+  clear() {
+    this.aggregateSnapshots.clear();
+    this.memberCursors.clear();
+    this.activePeerIds.clear();
+  }
+}
+
 type Listener = (event: ChatRealtimeEvent) => void;
+type CursorAckState = { deliveredSeq: number; readSeq: number; sentDeliveredSeq: number; sentReadSeq: number };
+type PendingRestCursorAck = { kind: "delivered" | "read"; conversationId: string; sequence: number; inFlight: boolean };
 
 class ChatRealtimeClient {
   private socket: WebSocket | null = null;
@@ -44,7 +124,11 @@ class ChatRealtimeClient {
   private heartbeatTimer: number | null = null;
   private reconnectTimer: number | null = null;
   private reconnectAttempt = 0;
-  private recipientCursors = new Map<string, { deliveredSeq: number; readSeq: number }>();
+  private connectedOnce = false;
+  private recipientCursorTracker = new ChatRecipientCursorTracker();
+  private cursorAcks = new Map<string, CursorAckState>();
+  private pendingRestCursorAcks = new Map<string, PendingRestCursorAck>();
+  private eventDeduplicator = new ChatRealtimeEventDeduplicator();
   private networkOnline = typeof navigator === "undefined" || navigator.onLine;
 
   constructor() {
@@ -62,7 +146,11 @@ class ChatRealtimeClient {
     this.listeners.add(listener);
     if (this.userId !== userId) {
       this.disconnect();
-      this.recipientCursors.clear();
+      this.recipientCursorTracker.clear();
+      this.cursorAcks.clear();
+      this.pendingRestCursorAcks.clear();
+      this.eventDeduplicator.clear();
+      this.connectedOnce = false;
       this.userId = userId;
     }
     this.connect();
@@ -78,18 +166,24 @@ class ChatRealtimeClient {
   }
 
   rememberRecipientCursor(conversationId: string, deliveredSeq = 0, readSeq = 0) {
-    const current = this.recipientCursors.get(conversationId) ?? { deliveredSeq: 0, readSeq: 0 };
-    this.recipientCursors.set(conversationId, {
-      deliveredSeq: Math.max(current.deliveredSeq, deliveredSeq),
-      readSeq: Math.max(current.readSeq, readSeq),
-    });
+    this.recipientCursorTracker.rememberAggregate(conversationId, deliveredSeq, readSeq);
+  }
+
+  rememberMemberCursor(conversationId: string, actorId: string, recipientIds: string[], deliveredSeq = 0, readSeq = 0) {
+    if (!this.userId) return;
+    this.recipientCursorTracker.rememberMember(conversationId, this.userId, actorId, recipientIds, deliveredSeq, readSeq);
+  }
+
+  clearRecipientMemberCursors(conversationId: string) {
+    this.recipientCursorTracker.clearMembers(conversationId);
+  }
+
+  recipientCursor(conversationId: string) {
+    return this.recipientCursorTracker.cursor(conversationId);
   }
 
   outgoingStatus(conversationId: string, sequence: number): "sent" | "delivered" | "read" {
-    const cursor = this.recipientCursors.get(conversationId);
-    if (cursor && sequence <= cursor.readSeq) return "read";
-    if (cursor && sequence <= cursor.deliveredSeq) return "delivered";
-    return "sent";
+    return this.recipientCursorTracker.outgoingStatus(conversationId, sequence);
   }
   publishLocalMessage(message: RealtimeChatMessage) {
     if (!this.userId || !message?.conversationId) return;
@@ -105,13 +199,20 @@ class ChatRealtimeClient {
   }
 
   acknowledgeDelivered(conversationId: string, sequence: number) {
-    this.send({ type: "DELIVERED_ACK", conversationId, sequence });
-    this.persistCursor("delivered", conversationId, sequence);
+    if (sequence <= 0) return;
+    const state = this.cursorState(conversationId);
+    if (sequence <= Math.max(state.deliveredSeq, state.readSeq)) return;
+    state.deliveredSeq = sequence;
+    this.sendCursorAck("delivered", conversationId, sequence);
   }
 
   acknowledgeRead(conversationId: string, sequence: number) {
-    this.send({ type: "READ_ACK", conversationId, sequence });
-    this.persistCursor("read", conversationId, sequence);
+    if (sequence <= 0) return;
+    const state = this.cursorState(conversationId);
+    if (sequence <= state.readSeq) return;
+    state.readSeq = sequence;
+    state.deliveredSeq = Math.max(state.deliveredSeq, sequence);
+    this.sendCursorAck("read", conversationId, sequence);
   }
 
   private connect() {
@@ -130,20 +231,20 @@ class ChatRealtimeClient {
       this.reconnectAttempt = 0;
       this.startHeartbeat();
       this.send({ type: "HEARTBEAT" });
-      this.reconnectListeners.forEach((listener) => listener());
+      this.replayCursorAcks();
+      if (this.connectedOnce) this.reconnectListeners.forEach((listener) => listener());
+      this.connectedOnce = true;
     };
     socket.onmessage = (message) => {
       if (this.socket !== socket) return;
       try {
         const event = JSON.parse(message.data) as ChatRealtimeEvent;
         if (!event?.type || !event.conversationId) return;
+        if (this.eventDeduplicator.shouldIgnore(event.eventId)) return;
+        this.listeners.forEach((listener) => listener(event));
         if (event.type === "MESSAGE_CREATED" && event.message && event.message.senderId !== this.userId) {
           this.acknowledgeDelivered(event.conversationId, event.message.messageSeq);
         }
-        if (event.type === "CURSOR_UPDATED" && event.actorId !== this.userId) {
-          this.rememberRecipientCursor(event.conversationId, event.deliveredSeq ?? 0, event.readSeq ?? 0);
-        }
-        this.listeners.forEach((listener) => listener(event));
       } catch {
         // Ignore malformed frames and keep the realtime channel alive.
       }
@@ -155,25 +256,108 @@ class ChatRealtimeClient {
       if (this.socket !== socket) return;
       this.stopHeartbeat();
       this.socket = null;
+      this.cursorAcks.forEach((cursor) => {
+        cursor.sentDeliveredSeq = 0;
+        cursor.sentReadSeq = 0;
+      });
       this.scheduleReconnect();
     };
   }
 
   private persistCursor(kind: "delivered" | "read", conversationId: string, sequence: number) {
     if (!this.userId || sequence <= 0) return;
-    const path = "/chat/conversations/" + encodeURIComponent(conversationId)
-      + "/cursor/" + kind + "?actorId=" + encodeURIComponent(this.userId);
+    const key = `${kind}:${conversationId}`;
+    const pending = this.pendingRestCursorAcks.get(key);
+    if (pending) {
+      pending.sequence = Math.max(pending.sequence, sequence);
+      return;
+    }
+    this.pendingRestCursorAcks.set(key, { kind, conversationId, sequence, inFlight: false });
+    this.flushRestCursorAck(key);
+  }
+  private flushRestCursorAck(key: string) {
+    const pending = this.pendingRestCursorAcks.get(key);
+    if (!pending || pending.inFlight || !this.userId) return;
+    pending.inFlight = true;
+    const sentSequence = pending.sequence;
+    const actorId = this.userId;
+    const path = "/chat/conversations/" + encodeURIComponent(pending.conversationId)
+      + "/cursor/" + pending.kind + "?actorId=" + encodeURIComponent(actorId);
     void fetch(API_BASE_URL + path, {
       method: "PUT",
       credentials: "include",
       headers: { Accept: "application/json", "Content-Type": "application/json" },
-      body: JSON.stringify({ sequence }),
-    }).catch(() => undefined);
+      body: JSON.stringify({ sequence: sentSequence }),
+    }).then((response) => {
+      if (!response.ok || this.userId !== actorId) return;
+      this.markCursorAckSent(pending.kind, pending.conversationId, sentSequence);
+    }).catch(() => undefined).finally(() => {
+      pending.inFlight = false;
+      if (this.pendingRestCursorAcks.get(key) !== pending) return;
+      if (pending.sequence > sentSequence) {
+        this.flushRestCursorAck(key);
+      } else {
+        this.pendingRestCursorAcks.delete(key);
+      }
+    });
   }
+
+  private cursorState(conversationId: string) {
+    let state = this.cursorAcks.get(conversationId);
+    if (!state) {
+      while (this.cursorAcks.size >= 500) {
+        const oldest = this.cursorAcks.keys().next().value;
+        if (!oldest) break;
+        this.cursorAcks.delete(oldest);
+      }
+      state = { deliveredSeq: 0, readSeq: 0, sentDeliveredSeq: 0, sentReadSeq: 0 };
+      this.cursorAcks.set(conversationId, state);
+    }
+    return state;
+  }
+
+  private markCursorAckSent(kind: "delivered" | "read", conversationId: string, sequence: number) {
+    const state = this.cursorState(conversationId);
+    if (kind === "read") {
+      state.readSeq = Math.max(state.readSeq, sequence);
+      state.deliveredSeq = Math.max(state.deliveredSeq, sequence);
+      state.sentReadSeq = Math.max(state.sentReadSeq, sequence);
+      state.sentDeliveredSeq = Math.max(state.sentDeliveredSeq, sequence);
+    } else {
+      state.deliveredSeq = Math.max(state.deliveredSeq, sequence);
+      state.sentDeliveredSeq = Math.max(state.sentDeliveredSeq, sequence);
+    }
+  }
+
+  private replayCursorAcks() {
+    this.cursorAcks.forEach((state, conversationId) => {
+      if (state.readSeq > state.sentReadSeq) {
+        this.sendCursorAck("read", conversationId, state.readSeq);
+      } else if (state.deliveredSeq > state.sentDeliveredSeq) {
+        this.sendCursorAck("delivered", conversationId, state.deliveredSeq);
+      }
+    });
+  }
+
+  private sendCursorAck(kind: "delivered" | "read", conversationId: string, sequence: number) {
+    const type = kind === "read" ? "READ_ACK" : "DELIVERED_ACK";
+    if (this.send({ type, conversationId, sequence })) {
+      this.markCursorAckSent(kind, conversationId, sequence);
+    } else {
+      this.persistCursor(kind, conversationId, sequence);
+    }
+  }
+
   private send(frame: { type: string; conversationId?: string; sequence?: number }) {
     if (this.socket?.readyState === WebSocket.OPEN) {
-      this.socket.send(JSON.stringify(frame));
+      try {
+        this.socket.send(JSON.stringify(frame));
+        return true;
+      } catch {
+        return false;
+      }
     }
+    return false;
   }
 
   private startHeartbeat() {

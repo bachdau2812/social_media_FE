@@ -88,40 +88,26 @@ describe("usePostEventStream", () => {
     unmount();
     window.removeEventListener("avatar-upload-result", globalResult);
   });
-  it("normalizes terminal post and story upload events", () => {
+  it("normalizes post results and forwards raw story terminal events to the owner", () => {
     const onUploadResult = vi.fn();
-    const { unmount } = renderHook(() => usePostEventStream("user-1", { onUploadResult }));
+    const onStoryUploadResult = vi.fn();
+    const { unmount } = renderHook(() => usePostEventStream("user-1", { onUploadResult, onStoryUploadResult }));
     const source = EventSourceStub.instances[0];
+    const approvedStory = JSON.stringify({ result: "APPROVED", message: "Story published" });
+    const rejectedStory = JSON.stringify({ result: "REJECTED", message: "Story rejected" });
 
     source.emit("post_upload", JSON.stringify({ result: "SUCCESSED", message: "Post published" }));
-    source.emit("story_upload_event", JSON.stringify({ result: "APPROVED", message: "Story published" }));
-    source.emit("story_upload_event", JSON.stringify({ result: "REJECTED", message: "Story rejected" }));
-    source.emit("story_upload_event", "not-json");
+    source.emit("story_upload_event", approvedStory);
+    source.emit("story_upload_event", rejectedStory);
 
-    expect(onUploadResult).toHaveBeenNthCalledWith(1, {
+    expect(onUploadResult).toHaveBeenCalledOnce();
+    expect(onUploadResult).toHaveBeenCalledWith({
       kind: "post",
       success: true,
       result: "SUCCESSED",
       message: "Post published",
     });
-    expect(onUploadResult).toHaveBeenNthCalledWith(2, {
-      kind: "story",
-      success: true,
-      result: "APPROVED",
-      message: "Story published",
-    });
-    expect(onUploadResult).toHaveBeenNthCalledWith(3, {
-      kind: "story",
-      success: false,
-      result: "REJECTED",
-      message: "Story rejected",
-    });
-    expect(onUploadResult).toHaveBeenNthCalledWith(4, {
-      kind: "story",
-      success: false,
-      result: undefined,
-      message: undefined,
-    });
+    expect(onStoryUploadResult.mock.calls.map(([payload]) => payload)).toEqual([approvedStory, rejectedStory]);
 
     unmount();
     expect(source.closed).toBe(true);
